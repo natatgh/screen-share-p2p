@@ -1,5 +1,8 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 
+let sharedClient: SupabaseClient | null = null;
+let sharedClientConfig = "";
+
 export type Signal = {
   from: string;
   to: string;
@@ -62,7 +65,12 @@ function connectLocal(room: string, self: string, cb: Callbacks): Signaling {
 }
 
 function connectSupabase(room: string, self: string, url: string, key: string, cb: Callbacks): Signaling {
-  const client: SupabaseClient = createClient(url, key, { auth: { persistSession: false } });
+  const config = `${url}:${key}`;
+  if (!sharedClient || sharedClientConfig !== config) {
+    sharedClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    sharedClientConfig = config;
+  }
+  const client = sharedClient;
   const channel: RealtimeChannel = client.channel(`screen:${room}`, {
     config: { presence: { key: self }, broadcast: { self: false } },
   });

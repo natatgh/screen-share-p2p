@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:realtime": "node --env-file=.env.local --import tsx scripts/smoke-supabase.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",
