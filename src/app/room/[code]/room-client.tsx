@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
 import { useRoom } from "@/lib/use-room";
+import { ConnectionDiagnostics } from "@/components/connection-diagnostics";
 import type { StreamFrameRate, StreamMode, StreamResolution, StreamSettings } from "@/lib/stream-quality";
 
 type Screen = { id: string; label: string; stream: MediaStream; local: boolean };
@@ -88,7 +89,7 @@ function QualityPanel({ settings, warning, onChange }: { settings: StreamSetting
 }
 
 export default function RoomClient({ code }: { code: string }) {
-  const { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, startSharing, stopSharing, setSettings } = useRoom(code);
+  const { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings } = useRoom(code);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -132,6 +133,7 @@ export default function RoomClient({ code }: { code: string }) {
       <section className="stage">
         <div className="stage-heading"><div><div className="eyebrow"><Radio size={14} /> ÁREA DE TRANSMISSÃO</div><h2>{featured ? "Acompanhe a transmissão" : "Pronto para começar"}</h2><p>{featured ? "Selecione uma tela para destacar ou abra em tela cheia." : "Compartilhe sua tela ou convide alguém para apresentar."}</p></div><div className="viewer-count"><UsersRound size={16} /> {peers.length + 1} {peers.length ? "na sala" : "pessoa na sala"}</div></div>
         {error && <div className="stage-error" role="alert"><Info size={18} /> {error}</div>}
+        <ConnectionDiagnostics status={status} peers={peers} metrics={metrics} />
 
         {featured ? <div className="player-layout"><VideoPlayer key={featured.id} screen={featured} />{streams.length > 1 && <div className="stream-rail" aria-label="Outras transmissões"><div className="rail-heading">Telas na sala <span>{streams.length}</span></div><div className="stream-thumbs">{streams.map((screen) => <StreamThumb key={screen.id} screen={screen} selected={screen.id === featured.id} onSelect={() => setSelectedId(screen.id)} />)}</div></div>}</div> : <div className="empty-stage"><div className="empty-visual"><MonitorPlay size={42} strokeWidth={1.4} /><span><Expand size={16} /></span></div><h3>Nenhuma tela compartilhada</h3><p>Inicie uma transmissão ou copie o link para convidar alguém.</p><button className="empty-invite" onClick={copy}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? "Link copiado" : "Copiar convite"}</button></div>}
 

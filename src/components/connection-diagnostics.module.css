@@ -1,0 +1,25 @@
+.card{min-width:0;margin:0 0 18px;border:1px solid #3b5148;border-radius:11px;background:#17231f;color:#e9f8ef}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;border:0;background:transparent;color:inherit;padding:10px 14px;text-align:left;cursor:pointer}
+.toggle:hover{background:#20332a}
+.title,.summary{display:inline-flex;align-items:center;gap:8px;font-size:12px}
+.title svg{color:#a8efc9}
+.title strong{font-size:12px}
+.summary{color:#a8c2b1;white-space:nowrap}
+.summary svg{transition:transform .15s}
+.rotated{transform:rotate(180deg)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#899c94}
+.dot.good{background:#93e9ae}.dot.degraded{background:#f1c279}.dot.poor{background:#f19685}
+.body{border-top:1px solid #344940;padding:14px}
+.signaling{display:flex;justify-content:space-between;gap:12px;color:#a3bbad;font-size:11px}
+.signaling strong{color:#e4f4e9;font-size:11px}
+.list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:13px}
+.peer{min-width:0;border:1px solid #354a40;border-radius:9px;background:#101a18;padding:11px}
+.peerHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px}
+.peerHeading strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.health{border-radius:12px;padding:4px 7px;background:#304038;color:#d0e9d8;white-space:nowrap;font-size:10px}
+.health.good{background:#234932;color:#b4f4c7}.health.degraded{background:#493a22;color:#f9d498}.health.poor{background:#512d2b;color:#ffbdb1}
+.values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:13px}
+.values div{min-width:0}.values span,.values strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.values span{color:#92aa9b;font-size:10px}.values strong{margin-top:3px;color:#eefaf2;font-size:12px}
+.empty,.note{color:#95ad9f;font-size:11px;line-height:1.5}.empty{margin:14px 0}.note{margin:12px 0 0}
+@media(max-width:650px){.toggle{align-items:flex-start;flex-direction:column}.summary{width:100%;justify-content:space-between}.list{grid-template-columns:1fr}}

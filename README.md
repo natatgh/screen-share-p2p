@@ -4,6 +4,8 @@ MVP de salas temporárias para compartilhar tela, janela ou monitor pelo navegad
 
 O **Lumen Desktop para Windows 11** fica em `apps/desktop`. Ele entra nas mesmas salas para assistir ou transmitir, sem iniciar captura ao entrar. A transmissão pode incluir vídeo de uma janela ou monitor e, para janelas, áudio do processo do aplicativo. Espectadores também podem usar a página web. Veja [as instruções do desktop](apps/desktop/README.md).
 
+Em cada sala, o painel **Diagnóstico** acompanha a sinalização e, durante uma transmissão P2P, mostra banda de envio/recebimento, RTT, jitter, perda de pacotes, FPS e indicadores de congelamento. As métricas são locais e não ficam gravadas.
+
 ## Rodar localmente
 
 Requisitos: Node.js 20.9+ e npm.

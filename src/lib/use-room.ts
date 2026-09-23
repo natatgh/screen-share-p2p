@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { connectRoom, type Signal, type Signaling, type SignalingConfig } from "./signaling";
+import { readPeerMetrics, type PeerMetrics, type StatsSnapshot } from "./rtc-stats";
 import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, removeNonTabAudio, type StreamSettings } from "./stream-quality";
 
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -28,6 +29,7 @@ export function useRoom(room: string, options?: RoomOptions) {
   const [settingsWarning, setSettingsWarning] = useState("");
   const [status, setStatus] = useState("Conectando…");
   const [error, setError] = useState("");
+  const [metrics, setMetrics] = useState<PeerMetrics[]>([]);
 
   const send = useCallback((to: string, owner: string, kind: Signal["kind"], data?: Signal["data"]) => {
     signaling.current?.send({ from: self.current, to, owner, kind, data });
@@ -210,5 +212,36 @@ export function useRoom(room: string, options?: RoomOptions) {
     };
   }, [room, closeInbound, closeOutbound, send, startOutbound]);
 
-  return { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, startSharing, stopSharing, setSettings };
+  useEffect(() => {
+    let active = true;
+    let polling = false;
+    const previous = new Map<string, StatsSnapshot>();
+    const poll = async () => {
+      if (polling) return;
+      polling = true;
+      const links = [
+        ...[...outbound.current].map(([id, link]) => ({ id, link, direction: "send" as const, current: outbound.current })),
+        ...[...inbound.current].map(([id, link]) => ({ id, link, direction: "receive" as const, current: inbound.current })),
+      ];
+      const result = await Promise.allSettled(links.map(async ({ id, link, direction, current }) => {
+        const report = await link.pc.getStats();
+        if (current.get(id) !== link) return null;
+        const key = `${direction}:${id}`;
+        const sample = readPeerMetrics(id, direction, link.pc.connectionState, report, previous.get(key));
+        previous.set(key, sample.snapshot);
+        return sample.metrics;
+      }));
+      if (active) {
+        const currentKeys = new Set(links.map(({ id, direction }) => `${direction}:${id}`));
+        for (const key of previous.keys()) if (!currentKeys.has(key)) previous.delete(key);
+        setMetrics(result.flatMap((item) => item.status === "fulfilled" && item.value ? [item.value] : []));
+      }
+      polling = false;
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2000);
+    return () => { active = false; clearInterval(timer); };
+  }, [room]);
+
+  return { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings };
 }

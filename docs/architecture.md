@@ -2,6 +2,8 @@
 
 O aplicativo Windows em `apps/desktop` reaproveita `useRoom` e `signaling.ts` com um adaptador de captura. Entrar na sala estabelece presença e recebe as transmissões dos participantes, sem iniciar captura. O botão de compartilhar abre um modal para escolher fonte e qualidade. O Electron lista fontes e seleciona o vídeo; o auxiliar C++ usa o HWND da janela para localizar o processo e capturar PCM somente da árvore desse processo. Um AudioWorklet converte PCM em trilha de áudio WebRTC. O sinal e a mídia seguem o mesmo protocolo P2P usado pelo navegador. O desktop não adiciona servidores à Vercel nem ao Supabase.
 
+O painel de diagnóstico consulta `RTCPeerConnection.getStats()` a cada dois segundos em cada ligação ativa. Calcula banda e perda a partir da diferença entre amostras, mostra RTT/jitter P2P, FPS e contadores de quadros descartados/congelamentos quando disponíveis. O estado do Supabase é mostrado separadamente; não há medição de latência até o servidor de sinalização. As amostras ficam somente na memória do participante, sem envio para outro serviço.
+
 ```text
 Navegador A ── SDP / ICE / presença ── signaling ── SDP / ICE / presença ── Navegador B
      └──────────────────── mídia WebRTC P2P ────────────────────────────────┘
