@@ -17,6 +17,12 @@ export type PeerMetrics = {
   recentFreezes: number | null;
   width: number | null;
   height: number | null;
+  captureFps: number | null;
+  encodedFps: number | null;
+  renderedFps: number | null;
+  processingMs: number | null;
+  qualityLimitationReason: string | null;
+  codec: string | null;
 };
 
 export type StatsSnapshot = {
@@ -27,6 +33,9 @@ export type StatsSnapshot = {
   frames: number;
   droppedFrames: number;
   freezes: number;
+  encodedFrames: number;
+  renderedFrames: number;
+  processingTime: number;
 };
 
 type Entry = RTCStats & Record<string, unknown>;
@@ -55,6 +64,8 @@ export function readPeerMetrics(
   const type = direction === "send" ? "outbound-rtp" : "inbound-rtp";
   const media = entries.filter((entry) => entry.type === type && !entry.isRemote);
   const video = media.find((entry) => entry.kind === "video" || entry.mediaType === "video");
+  const source = entries.find((entry) => entry.id === video?.mediaSourceId && entry.type === "media-source");
+  const codec = entries.find((entry) => entry.id === video?.codecId && entry.type === "codec");
   const remoteInbound = entries.find((entry) => entry.type === "remote-inbound-rtp" && (entry.kind === "video" || entry.mediaType === "video"));
   const bytes = media.reduce((total, entry) => total + (number(direction === "send" ? entry.bytesSent : entry.bytesReceived) ?? 0), 0);
   const timestamp = Math.max(0, ...media.map((entry) => number(entry.timestamp) ?? 0));
@@ -68,7 +79,10 @@ export function readPeerMetrics(
   const frames = frameValue ?? 0;
   const droppedFrames = droppedValue ?? 0;
   const freezes = freezeValue ?? 0;
-  const snapshot = { timestamp, bytes, packetsLost, packetsReceived, frames, droppedFrames, freezes };
+  const encodedFrames = number(video?.framesEncoded) ?? 0;
+  const renderedFrames = number(video?.framesRendered) ?? 0;
+  const processingTime = number(direction === "send" ? video?.totalEncodeTime : video?.totalDecodeTime) ?? 0;
+  const snapshot = { timestamp, bytes, packetsLost, packetsReceived, frames, droppedFrames, freezes, encodedFrames, renderedFrames, processingTime };
   const seconds = previous && timestamp > previous.timestamp ? (timestamp - previous.timestamp) / 1000 : 0;
   const byteDelta = delta(bytes, previous?.bytes);
   const bitrateKbps = seconds > 0 && byteDelta !== null ? rounded(byteDelta * 8 / seconds / 1000) : null;
@@ -83,6 +97,12 @@ export function readPeerMetrics(
   const fps = number(video?.framesPerSecond) ?? (seconds > 0 && frameDelta !== null ? rounded(frameDelta / seconds) : null);
   const droppedDelta = droppedValue !== null ? delta(droppedFrames, previous?.droppedFrames) : null;
   const freezeDelta = freezeValue !== null ? delta(freezes, previous?.freezes) : null;
+  const encodedDelta = number(video?.framesEncoded) !== null ? delta(encodedFrames, previous?.encodedFrames) : null;
+  const renderedDelta = number(video?.framesRendered) !== null ? delta(renderedFrames, previous?.renderedFrames) : null;
+  const processedFrames = direction === "send" ? encodedDelta : frameDelta;
+  const processingDelta = number(direction === "send" ? video?.totalEncodeTime : video?.totalDecodeTime) !== null
+    ? delta(processingTime, previous?.processingTime) : null;
+  const processingMs = processedFrames && processingDelta !== null ? Math.round(processingDelta * 1000 / processedFrames * 10) / 10 : null;
 
   const transport = entries.find((entry) => entry.type === "transport");
   const pairId = transport?.selectedCandidatePairId;
@@ -106,6 +126,12 @@ export function readPeerMetrics(
       droppedFrames: droppedValue, freezes: freezeValue,
       recentDroppedFrames: droppedDelta, recentFreezes: freezeDelta,
       width: number(video?.frameWidth), height: number(video?.frameHeight),
+      captureFps: direction === "send" ? rounded(number(source?.framesPerSecond)) : null,
+      encodedFps: direction === "send" && seconds > 0 && encodedDelta !== null ? rounded(encodedDelta / seconds) : null,
+      renderedFps: direction === "receive" && seconds > 0 && renderedDelta !== null ? rounded(renderedDelta / seconds) : null,
+      processingMs,
+      qualityLimitationReason: direction === "send" && typeof video?.qualityLimitationReason === "string" ? video.qualityLimitationReason : null,
+      codec: typeof codec?.mimeType === "string" ? codec.mimeType.replace(/^video\//, "") : null,
     },
     snapshot,
   };

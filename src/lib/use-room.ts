@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { connectRoom, type Signal, type Signaling, type SignalingConfig } from "./signaling";
 import { readPeerMetrics, type PeerMetrics, type StatsSnapshot } from "./rtc-stats";
+import { effectiveSettings, initialAdaptation, nextAdaptation, type AdaptationState } from "./adaptive-quality";
 import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, removeNonTabAudio, type StreamSettings } from "./stream-quality";
 
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -21,11 +22,14 @@ export function useRoom(room: string, options?: RoomOptions) {
   const inbound = useRef(new Map<string, Link>());
   const peersRef = useRef<string[]>([]);
   const settingsRef = useRef<StreamSettings>(defaultStreamSettings);
+  const adaptation = useRef(new Map<string, AdaptationState>());
+  const adaptiveRef = useRef(true);
   const [peers, setPeers] = useState<string[]>([]);
   const [remotes, setRemotes] = useState<Remote[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [sharing, setSharing] = useState(false);
   const [settings, setSettingsState] = useState<StreamSettings>(defaultStreamSettings);
+  const [adaptiveQuality, setAdaptiveQualityState] = useState(true);
   const [settingsWarning, setSettingsWarning] = useState("");
   const [status, setStatus] = useState("Conectando…");
   const [error, setError] = useState("");
@@ -41,6 +45,7 @@ export function useRoom(room: string, options?: RoomOptions) {
     if (notify) send(id, self.current, "stop");
     link.pc.close();
     outbound.current.delete(id);
+    adaptation.current.delete(id);
   }, [send]);
 
   const closeInbound = useCallback((id: string) => {
@@ -54,6 +59,7 @@ export function useRoom(room: string, options?: RoomOptions) {
     const pc = new RTCPeerConnection({ iceServers });
     const link: Link = { pc, pending: [] };
     outbound.current.set(id, link);
+    adaptation.current.set(id, { ...initialAdaptation });
     let offered = false;
     const earlyIce: RTCIceCandidateInit[] = [];
     pc.onicecandidate = (event) => {
@@ -95,6 +101,7 @@ export function useRoom(room: string, options?: RoomOptions) {
     settingsRef.current = next;
     setSettingsState(next);
     setSettingsWarning("");
+    adaptation.current.clear();
     const videoTrack = local.current?.getVideoTracks()[0];
     let captureApplied = true;
     if (videoTrack) {
@@ -110,6 +117,19 @@ export function useRoom(room: string, options?: RoomOptions) {
     }
     const senderApplied = (await Promise.all(updates)).every(Boolean);
     if (!captureApplied || !senderApplied) setSettingsWarning("Seu navegador pode limitar esta combinação. Reinicie a transmissão se a mudança não aparecer.");
+  }, []);
+
+  const setAdaptiveQuality = useCallback((enabled: boolean) => {
+    adaptiveRef.current = enabled;
+    setAdaptiveQualityState(enabled);
+    adaptation.current.clear();
+    if (!enabled) {
+      for (const link of outbound.current.values()) {
+        for (const sender of link.pc.getSenders()) {
+          if (sender.track?.kind === "video") void applyScreenSettings(sender, settingsRef.current);
+        }
+      }
+    }
   }, []);
 
   const startSharing = useCallback(async () => {
@@ -140,6 +160,7 @@ export function useRoom(room: string, options?: RoomOptions) {
     self.current = crypto.randomUUID();
     const currentOutbound = outbound.current;
     const currentInbound = inbound.current;
+    const currentAdaptation = adaptation.current;
     signaling.current = connectRoom(room, self.current, {
       onStatus: setStatus,
       onPeers: (ids) => {
@@ -206,6 +227,7 @@ export function useRoom(room: string, options?: RoomOptions) {
       for (const link of currentOutbound.values()) link.pc.close();
       for (const link of currentInbound.values()) link.pc.close();
       currentOutbound.clear(); currentInbound.clear();
+      currentAdaptation.clear();
       local.current?.getTracks().forEach((track) => track.stop());
       local.current = null;
       optionsRef.current?.capture?.stop?.();
@@ -234,7 +256,22 @@ export function useRoom(room: string, options?: RoomOptions) {
       if (active) {
         const currentKeys = new Set(links.map(({ id, direction }) => `${direction}:${id}`));
         for (const key of previous.keys()) if (!currentKeys.has(key)) previous.delete(key);
-        setMetrics(result.flatMap((item) => item.status === "fulfilled" && item.value ? [item.value] : []));
+        const samples = result.flatMap((item) => item.status === "fulfilled" && item.value ? [item.value] : []);
+        if (adaptiveRef.current) {
+          for (const sample of samples) {
+            if (sample.direction !== "send" || sample.connection !== "connected") continue;
+            const link = outbound.current.get(sample.id);
+            if (!link) continue;
+            const prior = adaptation.current.get(sample.id) ?? { ...initialAdaptation };
+            const next = nextAdaptation(prior, sample, settingsRef.current, Date.now());
+            adaptation.current.set(sample.id, next);
+            if (next.step !== prior.step) {
+              const sender = link.pc.getSenders().find((item) => item.track?.kind === "video");
+              if (sender) void applyScreenSettings(sender, effectiveSettings(settingsRef.current, next.step));
+            }
+          }
+        }
+        setMetrics(samples);
       }
       polling = false;
     };
@@ -243,5 +280,5 @@ export function useRoom(room: string, options?: RoomOptions) {
     return () => { active = false; clearInterval(timer); };
   }, [room]);
 
-  return { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings };
+  return { peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality };
 }

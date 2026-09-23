@@ -46,3 +46,20 @@ test("uses receiver feedback for sender packet loss when available", () => {
   assert.equal(sample.metrics.droppedFrames, null);
   assert.equal(sample.metrics.health, "poor");
 });
+
+test("separates capture, encoding and playback work when browser reports it", () => {
+  const make = (timestamp: number, frames: number, seconds: number) => new Map([
+    ["source", { id: "source", type: "media-source", timestamp, framesPerSecond: 30 }],
+    ["codec", { id: "codec", type: "codec", timestamp, mimeType: "video/VP8" }],
+    ["video", { id: "video", type: "outbound-rtp", timestamp, kind: "video", bytesSent: frames * 1000,
+      framesEncoded: frames, framesSent: frames, framesPerSecond: 25, totalEncodeTime: seconds,
+      mediaSourceId: "source", codecId: "codec", qualityLimitationReason: "cpu" }],
+  ]) as unknown as RTCStatsReport;
+  const first = readPeerMetrics("peer", "send", "connected", make(1000, 20, 0.2));
+  const second = readPeerMetrics("peer", "send", "connected", make(3000, 70, 0.7), first.snapshot);
+  assert.equal(second.metrics.captureFps, 30);
+  assert.equal(second.metrics.encodedFps, 25);
+  assert.equal(second.metrics.processingMs, 10);
+  assert.equal(second.metrics.qualityLimitationReason, "cpu");
+  assert.equal(second.metrics.codec, "VP8");
+});

@@ -12,6 +12,9 @@
 .body{border-top:1px solid #344940;padding:14px}
 .signaling{display:flex;justify-content:space-between;gap:12px;color:#a3bbad;font-size:11px}
 .signaling strong{color:#e4f4e9;font-size:11px}
+.adaptive{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:10px;border:1px solid #354a40;border-radius:8px;font-size:12px}
+.adaptive small{display:block;margin-top:3px;color:#95ad9f;line-height:1.4}
+.adaptive input{accent-color:#a8efc9;width:17px;height:17px}
 .list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:13px}
 .peer{min-width:0;border:1px solid #354a40;border-radius:9px;background:#101a18;padding:11px}
 .peerHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px}

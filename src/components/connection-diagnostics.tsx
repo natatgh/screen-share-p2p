@@ -16,10 +16,12 @@ function value(number: number | null, suffix: string, digits = 0): string {
   return number === null ? "—" : `${number.toFixed(digits)} ${suffix}`;
 }
 
-export function ConnectionDiagnostics({ status, peers, metrics }: {
+export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality, onAdaptiveQualityChange }: {
   status: string;
   peers: string[];
   metrics: PeerMetrics[];
+  adaptiveQuality?: boolean;
+  onAdaptiveQualityChange?: (enabled: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const worst = metrics.some((item) => item.health === "poor") ? "poor"
@@ -35,6 +37,7 @@ export function ConnectionDiagnostics({ status, peers, metrics }: {
     </button>
     {open && <div className={styles.body}>
       <div className={styles.signaling}><span>Sinalização da sala</span><strong>{status}</strong></div>
+      {onAdaptiveQualityChange && <label className={styles.adaptive}><span>Qualidade automática <small>Ajusta cada espectador após quedas persistentes; a escolha manual é o máximo.</small></span><input type="checkbox" checked={adaptiveQuality ?? false} onChange={(event) => onAdaptiveQualityChange(event.target.checked)} /></label>}
       {metrics.length ? <div className={styles.list}>{metrics.map((item) => {
         const index = peers.indexOf(item.id);
         return <div className={styles.peer} key={`${item.direction}:${item.id}`}>
@@ -44,6 +47,9 @@ export function ConnectionDiagnostics({ status, peers, metrics }: {
             <div><span>RTT P2P</span><strong>{value(item.rttMs, "ms")}</strong></div>
             <div><span>Jitter</span><strong>{value(item.jitterMs, "ms")}</strong></div>
             <div><span>Vídeo</span><strong>{item.width && item.height ? `${item.width}×${item.height}` : "—"}{item.fps !== null ? ` · ${item.fps} FPS` : ""}</strong></div>
+            {item.codec && <div><span>Codec</span><strong>{item.codec}</strong></div>}
+            {item.direction === "send" && <><div><span>Captura</span><strong>{value(item.captureFps, "FPS")}</strong></div><div><span>Codificação</span><strong>{value(item.encodedFps, "FPS")}{item.processingMs !== null ? ` · ${value(item.processingMs, "ms/quadro", 1)}` : ""}</strong></div><div><span>Limitação</span><strong>{({ cpu: "CPU", bandwidth: "Banda", other: "Outra", none: "Nenhuma" } as Record<string, string>)[item.qualityLimitationReason ?? ""] ?? "—"}</strong></div></>}
+            {item.direction === "receive" && <><div><span>Exibição</span><strong>{value(item.renderedFps, "FPS")}</strong></div><div><span>Decodificação</span><strong>{value(item.processingMs, "ms/quadro", 1)}</strong></div></>}
             <div><span>Perda de pacotes</span><strong>{value(item.lossPercent, "%", 1)}</strong></div>
             {item.direction === "receive" && <><div><span>Quadros descartados (2 s)</span><strong>{item.recentDroppedFrames ?? "—"}</strong></div><div><span>Congelamentos (2 s)</span><strong>{item.recentFreezes ?? "—"}</strong></div></>}
           </div>
