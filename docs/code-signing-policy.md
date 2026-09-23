@@ -1,15 +1,13 @@
 # Code signing policy
 
-**Status:** candidatura à assinatura de código da SignPath Foundation em preparação. As releases até `v0.2.2` não têm assinatura Authenticode e podem ser bloqueadas pelo Smart App Control do Windows. Não trate a assinatura Ed25519 do manifesto de atualização como assinatura do executável.
+**Status:** nenhuma assinatura de código Authenticode está configurada. As releases até `v0.2.2` são executáveis não assinados e podem ser bloqueadas pelo Smart App Control do Windows. A assinatura Ed25519 do manifesto de atualização verifica o download feito pelo Lumen, mas não autentica o executável perante o Windows.
 
-Após a aprovação, a atribuição exigida pela SignPath será: **Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).** A emissão e a configuração do certificado dependem da SignPath; esta frase não indica que as releases atuais já estejam assinadas.
+O projeto não solicita que usuários desativem o Smart App Control nem instalem certificados locais para executar uma release. O mantenedor não se cadastrará em um serviço de assinatura neste momento. Caso a política mude, o fornecedor, o certificado e o fluxo de aprovação serão documentados antes de distribuir builds assinadas.
 
 ## Responsáveis e processo
 
-- Autor, mantenedor e revisor de contribuições externas: [natatgh](https://github.com/natatgh).
-- Aprovador das solicitações de assinatura e da publicação das releases: [natatgh](https://github.com/natatgh).
-- O código-fonte, a build e a Action de releases são públicos em [natatgh/screen-share-p2p](https://github.com/natatgh/screen-share-p2p). As builds de release usam runners hospedados pelo GitHub e tags SemVer.
-- Nenhuma release assinada será publicada antes de uma aprovação manual e da verificação do artefato recebido. As configurações de SignPath e o fluxo de assinatura serão adicionados após a aprovação da candidatura.
+- Mantenedor e aprovador das releases: [natatgh](https://github.com/natatgh).
+- Código, builds e Action de releases: [natatgh/screen-share-p2p](https://github.com/natatgh/screen-share-p2p).
 
 ## Dados e distribuição
 

@@ -44,6 +44,7 @@ Os canais Realtime são públicos e o código é a única barreira de entrada. O
 - [Decisões técnicas](docs/decisions.md)
 - [Roadmap](docs/roadmap.md)
 - [Code signing policy](docs/code-signing-policy.md)
+- [Downloads do Desktop](docs/downloads.md)
 - [Privacidade](PRIVACY.md)
 - [Licença MIT](LICENSE)
 
