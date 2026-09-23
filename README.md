@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lumen — compartilhamento de tela P2P
 
-## Getting Started
+MVP de salas temporárias para compartilhar tela, janela ou monitor pelo navegador. Qualquer participante pode transmitir; os demais podem assistir. Sem conta, sem gravação, sem LiveKit ou coturn.
 
-First, run the development server:
+## Rodar localmente
+
+Requisitos: Node.js 20.9+ e npm.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra http://localhost:3000, crie uma sala e abra o link em outra aba ou navegador. `npm run dev` inicia o site na porta 3000 e o servidor de signaling na 3001. A captura de tela exige contexto seguro: localhost funciona; para acessar por outro dispositivo use HTTPS.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy gratuito
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Crie um projeto no plano gratuito do Supabase e copie a URL e a chave **publishable** no painel Connect.
+2. Importe este repositório pessoal na Vercel Hobby.
+3. Configure `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` como variáveis de ambiente na Vercel. Não use chave secret/service role.
+4. Faça deploy. O build é o padrão Next.js; o servidor local da porta 3001 não é usado no deploy.
 
-## Learn More
+Os canais Realtime são públicos e o código é a única barreira de entrada. O MVP é adequado para compartilhamento casual com pessoas de confiança, não para conteúdo confidencial. O Supabase gratuito pode pausar projetos inativos e tem cotas; veja [Arquitetura](docs/architecture.md).
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `npm run dev`: interface + signaling local
+- `npm run dev:web`: interface apenas, para uso com Supabase configurado
+- `npm run dev:signal`: signaling local apenas
+- `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`: verificações
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Documentação
 
-## Deploy on Vercel
+- [Arquitetura e limites](docs/architecture.md)
+- [Decisões técnicas](docs/decisions.md)
+- [Roadmap](docs/roadmap.md)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Limitações do MVP
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- WebRTC em malha: cada transmissor envia uma cópia por espectador. Recomendado para grupos pequenos.
+- STUN público pode falhar em NAT simétrico ou redes restritas; TURN futuro resolverá parte desses casos.
+- Áudio do sistema depende do navegador e do sistema operacional.
+- Não há autenticação, moderação, criptografia ponta a ponta adicional, persistência ou gravação. WebRTC cifra a mídia em trânsito.

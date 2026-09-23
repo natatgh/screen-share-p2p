@@ -1,69 +1,37 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createRoom, isValidRoom, normalizeRoom } from "@/lib/room";
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+  const router = useRouter();
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const join = () => {
+    const normalized = normalizeRoom(code);
+    if (!isValidRoom(normalized)) return setError("Digite um código válido de 8 caracteres.");
+    router.push(`/room/${normalized}`);
+  };
+  return <main className="home-shell">
+    <div className="brand"><span className="brand-mark">◈</span> Lumen<span className="brand-dot">.</span></div>
+    <div className="home-grid">
+      <section className="hero">
+        <div className="eyebrow"><span className="live-dot" /> SCREEN SHARING, SEM COMPLICAÇÃO</div>
+        <h1>Mostre sua tela.<br /><em>Compartilhe a ideia.</em></h1>
+        <p>Crie uma sala temporária e convide quem você quiser. Qualquer pessoa pode transmitir uma janela, monitor ou tela inteira.</p>
+        <div className="hero-points"><span>↗ Direto entre navegadores</span><span>◎ Sem conta</span><span>◇ Sem instalar nada</span></div>
+      </section>
+      <section className="entry-card" aria-label="Acessar sala">
+        <div className="card-icon">▣</div><h2>Comece uma sessão</h2><p>Uma sala privada por código, pronta em segundos.</p>
+        <button className="primary-button" onClick={() => router.push(`/room/${createRoom()}`)}>Criar nova sala <span>↗</span></button>
+        <div className="divider"><span>ou entre com um código</span></div>
+        <label htmlFor="room-code">CÓDIGO DA SALA</label>
+        <div className="join-row"><input id="room-code" value={code} onChange={(event) => { setCode(normalizeRoom(event.target.value)); setError(""); }} onKeyDown={(event) => { if (event.key === "Enter") join(); }} placeholder="XXXXXXXX" maxLength={8} autoComplete="off" /><button onClick={join} aria-label="Entrar na sala">→</button></div>
+        {error && <p className="error" role="alert">{error}</p>}
+        <small>O código funciona como convite. Compartilhe apenas com pessoas de confiança.</small>
+      </section>
     </div>
-  );
+    <footer>WebRTC P2P · Código temporário · Feito para conversas rápidas</footer>
+  </main>;
 }
