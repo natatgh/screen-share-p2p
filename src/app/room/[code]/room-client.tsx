@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
 import { useRoom } from "@/lib/use-room";
-import type { StreamQuality } from "@/lib/stream-quality";
+import type { StreamFrameRate, StreamMode, StreamResolution, StreamSettings } from "@/lib/stream-quality";
 
 type Screen = { id: string; label: string; stream: MediaStream; local: boolean };
 
@@ -67,12 +67,33 @@ function StreamThumb({ screen, selected, onSelect }: { screen: Screen; selected:
   </button>;
 }
 
+const resolutions: { value: StreamResolution; label: string }[] = [
+  { value: 720, label: "720p" },
+  { value: 1080, label: "1080p" },
+  { value: "source", label: "Original" },
+];
+const frameRates: StreamFrameRate[] = [15, 30, 60];
+
+function QualityPanel({ settings, warning, onChange }: { settings: StreamSettings; warning: string; onChange: (next: StreamSettings) => Promise<void> }) {
+  return <section id="stream-settings" className="quality-panel" aria-label="Configurar qualidade da transmissão">
+    <div className="quality-panel-heading"><div><strong>Qualidade da transmissão</strong><span>Escolha como equilibrar nitidez e movimento.</span></div><SlidersHorizontal size={19} /></div>
+    <label className="mode-control" htmlFor="stream-mode">PREFERÊNCIA<select id="stream-mode" value={settings.mode} onChange={(event) => void onChange({ ...settings, mode: event.target.value as StreamMode })}><option value="balanced">Equilibrado</option><option value="smooth">Vídeo mais fluido</option><option value="detail">Texto mais nítido</option></select></label>
+    <div className="quality-options">
+      <div className="quality-option"><div className="quality-option-title">RESOLUÇÃO</div><div className="segment-control" role="group" aria-label="Resolução da transmissão">{resolutions.map((option) => <button key={option.value} type="button" aria-pressed={settings.resolution === option.value} className={settings.resolution === option.value ? "selected" : ""} onClick={() => void onChange({ ...settings, resolution: option.value })}>{option.label}</button>)}</div></div>
+      <div className="quality-option"><div className="quality-option-title">QUADROS POR SEGUNDO</div><div className="segment-control" role="group" aria-label="Quadros por segundo">{frameRates.map((frameRate) => <button key={frameRate} type="button" aria-pressed={settings.frameRate === frameRate} className={settings.frameRate === frameRate ? "selected" : ""} onClick={() => void onChange({ ...settings, frameRate })}>{frameRate}</button>)}</div></div>
+    </div>
+    <p className="quality-note">O navegador e a conexão podem limitar a resolução e os FPS efetivos. 60 FPS exige mais CPU e upload por espectador.</p>
+    {warning && <p className="quality-warning" role="status">{warning}</p>}
+  </section>;
+}
+
 export default function RoomClient({ code }: { code: string }) {
-  const { peers, remotes, localStream, sharing, quality, status, error, startSharing, stopSharing, setQuality } = useRoom(code);
+  const { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, startSharing, stopSharing, setSettings } = useRoom(code);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   const [startingShare, setStartingShare] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const streams: Screen[] = [
     ...remotes.map((remote) => ({ id: remote.id, label: `Tela do participante ${Math.max(1, peers.indexOf(remote.id) + 1)}`, stream: remote.stream, local: false })),
     ...(localStream ? [{ id: "self", label: "Sua tela", stream: localStream, local: true }] : []),
@@ -114,7 +135,8 @@ export default function RoomClient({ code }: { code: string }) {
 
         {featured ? <div className="player-layout"><VideoPlayer key={featured.id} screen={featured} />{streams.length > 1 && <div className="stream-rail" aria-label="Outras transmissões"><div className="rail-heading">Telas na sala <span>{streams.length}</span></div><div className="stream-thumbs">{streams.map((screen) => <StreamThumb key={screen.id} screen={screen} selected={screen.id === featured.id} onSelect={() => setSelectedId(screen.id)} />)}</div></div>}</div> : <div className="empty-stage"><div className="empty-visual"><MonitorPlay size={42} strokeWidth={1.4} /><span><Expand size={16} /></span></div><h3>Nenhuma tela compartilhada</h3><p>Inicie uma transmissão ou copie o link para convidar alguém.</p><button className="empty-invite" onClick={copy}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? "Link copiado" : "Copiar convite"}</button></div>}
 
-        <div className="stage-actions"><div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? peers.length ? "Os participantes podem assistir ao que você compartilhou." : "Convide alguém para assistir." : "Escolha uma janela, aba ou monitor no navegador."}</span></div></div><div className="stage-controls"><label className="quality-control">Qualidade <ChevronDown size={14} /><select value={quality} onChange={(event) => setQuality(event.target.value as StreamQuality)}><option value="balanced">Equilibrada · 1080p · até 3 Mb/s</option><option value="smooth">Fluidez · 720p · até 2,5 Mb/s</option><option value="high">Alta · original · até 6 Mb/s</option><option value="dataSaver">Economia · 720p · até 1 Mb/s</option></select></label><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : beginSharing} disabled={startingShare}>{sharing ? <Square size={16} fill="currentColor" /> : <ScreenShare size={18} />}{sharing ? "Parar transmissão" : startingShare ? "Abrindo captura…" : "Compartilhar tela"}</button></div></div>
+        {settingsOpen && <QualityPanel settings={settings} warning={settingsWarning} onChange={setSettings} />}
+        <div className="stage-actions"><div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? peers.length ? "Os participantes podem assistir ao que você compartilhou." : "Convide alguém para assistir." : "Escolha uma janela, aba ou monitor no navegador."}</span></div></div><div className="stage-controls"><button type="button" className="quality-trigger" aria-expanded={settingsOpen} aria-controls="stream-settings" onClick={() => setSettingsOpen((open) => !open)}><SlidersHorizontal size={16} /><span><small>QUALIDADE</small><strong>{settings.resolution === "source" ? "Original" : `${settings.resolution}p`} · {settings.frameRate} FPS</strong></span><ChevronDown size={15} className={settingsOpen ? "rotated" : ""} /></button><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : beginSharing} disabled={startingShare}>{sharing ? <Square size={16} fill="currentColor" /> : <ScreenShare size={18} />}{sharing ? "Parar transmissão" : startingShare ? "Abrindo captura…" : "Compartilhar tela"}</button></div></div>
       </section>
     </div>
   </main>;

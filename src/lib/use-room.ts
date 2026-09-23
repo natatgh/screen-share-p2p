@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { connectRoom, type Signal, type Signaling } from "./signaling";
-import { applyScreenQuality, contentHintForQuality, type StreamQuality } from "./stream-quality";
+import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, type StreamSettings } from "./stream-quality";
 
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[] };
@@ -15,12 +15,13 @@ export function useRoom(room: string) {
   const outbound = useRef(new Map<string, Link>());
   const inbound = useRef(new Map<string, Link>());
   const peersRef = useRef<string[]>([]);
-  const qualityRef = useRef<StreamQuality>("balanced");
+  const settingsRef = useRef<StreamSettings>(defaultStreamSettings);
   const [peers, setPeers] = useState<string[]>([]);
   const [remotes, setRemotes] = useState<Remote[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [quality, setQualityState] = useState<StreamQuality>("balanced");
+  const [settings, setSettingsState] = useState<StreamSettings>(defaultStreamSettings);
+  const [settingsWarning, setSettingsWarning] = useState("");
   const [status, setStatus] = useState("Conectando…");
   const [error, setError] = useState("");
 
@@ -62,7 +63,7 @@ export function useRoom(room: string) {
     };
     for (const track of stream.getTracks()) {
       const sender = pc.addTrack(track, stream);
-      if (track.kind === "video") await applyScreenQuality(sender, qualityRef.current);
+      if (track.kind === "video") await applyScreenSettings(sender, settingsRef.current);
     }
     try {
       await pc.setLocalDescription(await pc.createOffer());
@@ -83,16 +84,25 @@ export function useRoom(room: string) {
     setSharing(false);
   }, [closeOutbound]);
 
-  const setQuality = useCallback((next: StreamQuality) => {
-    qualityRef.current = next;
-    setQualityState(next);
+  const setSettings = useCallback(async (next: StreamSettings) => {
+    settingsRef.current = next;
+    setSettingsState(next);
+    setSettingsWarning("");
     const videoTrack = local.current?.getVideoTracks()[0];
-    if (videoTrack) videoTrack.contentHint = contentHintForQuality(next);
+    let captureApplied = true;
+    if (videoTrack) {
+      videoTrack.contentHint = contentHintForSettings(next);
+      try { await videoTrack.applyConstraints(captureConstraintsForSettings(next)); }
+      catch { captureApplied = false; }
+    }
+    const updates: Promise<boolean>[] = [];
     for (const link of outbound.current.values()) {
       for (const sender of link.pc.getSenders()) {
-        if (sender.track?.kind === "video") void applyScreenQuality(sender, next);
+        if (sender.track?.kind === "video") updates.push(applyScreenSettings(sender, next));
       }
     }
+    const senderApplied = (await Promise.all(updates)).every(Boolean);
+    if (!captureApplied || !senderApplied) setSettingsWarning("Seu navegador pode limitar esta combinação. Reinicie a transmissão se a mudança não aparecer.");
   }, []);
 
   const startSharing = useCallback(async () => {
@@ -102,9 +112,9 @@ export function useRoom(room: string) {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30 } }, audio: true });
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: captureConstraintsForSettings(settingsRef.current), audio: true });
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
-      stream.getVideoTracks()[0].contentHint = contentHintForQuality(qualityRef.current);
+      stream.getVideoTracks()[0].contentHint = contentHintForSettings(settingsRef.current);
       local.current = stream;
       setLocalStream(stream);
       stream.getVideoTracks()[0].addEventListener("ended", stopSharing, { once: true });
@@ -191,5 +201,5 @@ export function useRoom(room: string) {
     };
   }, [room, closeInbound, closeOutbound, send, startOutbound]);
 
-  return { peers, remotes, localStream, sharing, quality, status, error, startSharing, stopSharing, setQuality };
+  return { peers, remotes, localStream, sharing, settings, settingsWarning, status, error, startSharing, stopSharing, setSettings };
 }

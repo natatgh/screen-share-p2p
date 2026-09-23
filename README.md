@@ -13,7 +13,7 @@ npm run dev
 
 Abra http://localhost:3000, crie uma sala e abra o link em outra aba ou navegador. `npm run dev` inicia o site na porta 3000 e o servidor de signaling na 3001. A captura de tela exige contexto seguro: localhost funciona; para acessar por outro dispositivo use HTTPS.
 
-Na sala, escolha a qualidade antes ou durante o compartilhamento. **Equilibrada** é o padrão (até 1080p e 30 fps); **Fluidez** prioriza movimento em 720p e 30 fps; **Alta** preserva a resolução capturada; **Economia** reduz para até 720p e 15 fps. O limite de envio é aplicado por espectador; a qualidade efetiva depende da rede, do navegador e da resolução da tela de origem.
+Na sala, abra **Qualidade** para escolher a preferência de codificação (Equilibrado, Vídeo mais fluido ou Texto mais nítido), a resolução (720p, 1080p ou Original) e os quadros por segundo (15, 30 ou 60). O padrão é Equilibrado, 1080p e 30 FPS. É possível mudar os ajustes durante a transmissão; o app tenta atualizar a captura e os envios ativos. O navegador pode limitar a qualidade efetiva. Cada espectador consome upload adicional, especialmente em 60 FPS.
 
 ## Deploy gratuito
 

@@ -1,26 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyScreenQuality, contentHintForQuality, encodingForQuality } from "../src/lib/stream-quality";
+import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, encodingForSettings } from "../src/lib/stream-quality";
 
-test("quality presets preserve native resolution or scale large captures", () => {
-  assert.deepEqual(encodingForQuality("high", 2160), {
-    maxBitrate: 6_000_000, maxFramerate: 30, scaleResolutionDownBy: 1,
+test("resolution and frame rate can be selected independently", () => {
+  assert.deepEqual(defaultStreamSettings, { mode: "balanced", resolution: 1080, frameRate: 30 });
+  assert.deepEqual(encodingForSettings({ mode: "smooth", resolution: 720, frameRate: 60 }, 1440), {
+    maxBitrate: 4_000_000, maxFramerate: 60, scaleResolutionDownBy: 2,
   });
-  assert.deepEqual(encodingForQuality("balanced", 2160), {
-    maxBitrate: 3_000_000, maxFramerate: 30, scaleResolutionDownBy: 2,
+  assert.deepEqual(encodingForSettings({ mode: "detail", resolution: "source", frameRate: 15 }, 2160), {
+    maxBitrate: 3_000_000, maxFramerate: 15, scaleResolutionDownBy: 1,
   });
-  assert.deepEqual(encodingForQuality("dataSaver", 2160), {
-    maxBitrate: 1_000_000, maxFramerate: 15, scaleResolutionDownBy: 3,
+  assert.equal(encodingForSettings({ mode: "balanced", resolution: 1080, frameRate: 30 }, 720).scaleResolutionDownBy, 1);
+  assert.deepEqual(captureConstraintsForSettings({ mode: "balanced", resolution: "source", frameRate: 60 }), {
+    frameRate: { ideal: 60, max: 60 },
   });
-  assert.equal(encodingForQuality("dataSaver", 720).scaleResolutionDownBy, 1);
-  assert.deepEqual(encodingForQuality("smooth", 1440), {
-    maxBitrate: 2_500_000, maxFramerate: 30, scaleResolutionDownBy: 2,
-  });
-  assert.equal(contentHintForQuality("smooth"), "motion");
-  assert.equal(contentHintForQuality("balanced"), "detail");
+  assert.equal(contentHintForSettings({ mode: "smooth", resolution: 720, frameRate: 30 }), "motion");
+  assert.equal(contentHintForSettings({ mode: "detail", resolution: 1080, frameRate: 30 }), "text");
 });
 
-test("switching quality updates the active video sender", async () => {
+test("changing settings updates the video sender", async () => {
   const parameters = { encodings: [{}] } as RTCRtpSendParameters;
   let applied: RTCRtpSendParameters | undefined;
   const sender = {
@@ -29,8 +27,9 @@ test("switching quality updates the active video sender", async () => {
     setParameters: async (next: RTCRtpSendParameters) => { applied = next; },
   } as unknown as RTCRtpSender;
 
-  await applyScreenQuality(sender, "dataSaver");
+  assert.equal(await applyScreenSettings(sender, { mode: "smooth", resolution: 720, frameRate: 60 }), true);
   assert.equal(applied?.encodings[0].scaleResolutionDownBy, 3);
-  assert.equal(applied?.encodings[0].maxBitrate, 1_000_000);
-  assert.equal(applied?.encodings[0].maxFramerate, 15);
+  assert.equal(applied?.encodings[0].maxBitrate, 4_000_000);
+  assert.equal(applied?.encodings[0].maxFramerate, 60);
+  assert.equal(applied?.degradationPreference, "maintain-framerate");
 });
