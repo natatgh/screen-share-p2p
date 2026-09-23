@@ -16,6 +16,7 @@ export function useRoom(room: string) {
   const peersRef = useRef<string[]>([]);
   const [peers, setPeers] = useState<string[]>([]);
   const [remotes, setRemotes] = useState<Remote[]>([]);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [sharing, setSharing] = useState(false);
   const [status, setStatus] = useState("Conectando…");
   const [error, setError] = useState("");
@@ -72,6 +73,7 @@ export function useRoom(room: string) {
     for (const id of [...outbound.current.keys()]) closeOutbound(id, true);
     local.current?.getTracks().forEach((track) => track.stop());
     local.current = null;
+    setLocalStream(null);
     setSharing(false);
   }, [closeOutbound]);
 
@@ -85,6 +87,7 @@ export function useRoom(room: string) {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
       local.current = stream;
+      setLocalStream(stream);
       stream.getVideoTracks()[0].addEventListener("ended", stopSharing, { once: true });
       setSharing(true);
       for (const id of peersRef.current) void startOutbound(id, stream);
@@ -169,5 +172,5 @@ export function useRoom(room: string) {
     };
   }, [room, closeInbound, closeOutbound, send, startOutbound]);
 
-  return { peers, remotes, sharing, status, error, startSharing, stopSharing };
+  return { peers, remotes, localStream, sharing, status, error, startSharing, stopSharing };
 }

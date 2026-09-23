@@ -4,14 +4,15 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRoom } from "@/lib/use-room";
 
-function VideoTile({ stream, label }: { stream: MediaStream; label: string }) {
+function VideoTile({ stream, label, muted = false }: { stream: MediaStream; label: string; muted?: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (video.current) video.current.srcObject = stream; }, [stream]);
-  return <div className="video-tile"><video ref={video} autoPlay playsInline controls aria-label={label} /><div className="video-label"><span className="live-dot" /> {label}</div></div>;
+  return <div className="video-tile"><video ref={video} autoPlay playsInline controls muted={muted} aria-label={label} /><div className="video-label"><span className="live-dot" /> {label}</div></div>;
 }
 
 export default function RoomClient({ code }: { code: string }) {
-  const { peers, remotes, sharing, status, error, startSharing, stopSharing } = useRoom(code);
+  const { peers, remotes, localStream, sharing, status, error, startSharing, stopSharing } = useRoom(code);
+  const hasStreams = Boolean(localStream) || remotes.length > 0;
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try { await navigator.clipboard.writeText(location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -30,10 +31,10 @@ export default function RoomClient({ code }: { code: string }) {
         <div className="sidebar-bottom"><span>ⓘ</span> Salas não ficam gravadas. O vídeo passa diretamente entre os participantes sempre que a rede permitir.</div>
       </aside>
       <section className="stage">
-        <div className="stage-heading"><div><div className="eyebrow">TRANSMISSÕES</div><h2>{remotes.length ? "Compartilhamentos ao vivo" : "Tudo pronto para começar"}</h2></div><span className="viewer-count">◎ {peers.length + 1} na sala</span></div>
+        <div className="stage-heading"><div><div className="eyebrow">TRANSMISSÕES</div><h2>{hasStreams ? "Compartilhamentos ao vivo" : "Tudo pronto para começar"}</h2></div><span className="viewer-count">◎ {peers.length + 1} na sala</span></div>
         {error && <div className="stage-error" role="alert">{error}</div>}
-        {remotes.length ? <div className="video-grid">{remotes.map((remote, index) => <VideoTile key={remote.id} stream={remote.stream} label={`Tela do participante ${peers.indexOf(remote.id) + 1 || index + 1}`} />)}</div> : <div className="empty-stage"><div className="empty-visual"><span>▧</span><i>✦</i></div><h3>Nenhuma tela sendo compartilhada</h3><p>Inicie a transmissão ou compartilhe o link para alguém entrar na sala.</p></div>}
-        <div className="stage-actions"><div><strong>{sharing ? "Sua tela está ao vivo" : "Sua tela, sua vez"}</strong><span>{sharing ? "Os participantes podem ver o que você compartilhou." : "Escolha uma janela, tela ou monitor no navegador."}</span></div><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : startSharing}>{sharing ? "■ Parar transmissão" : "▣ Compartilhar tela"}</button></div>
+        {hasStreams ? <div className="video-grid">{localStream && <VideoTile stream={localStream} label="Sua tela (prévia)" muted />}{remotes.map((remote, index) => <VideoTile key={remote.id} stream={remote.stream} label={`Tela do participante ${peers.indexOf(remote.id) + 1 || index + 1}`} />)}</div> : <div className="empty-stage"><div className="empty-visual"><span>▧</span><i>✦</i></div><h3>Nenhuma tela sendo compartilhada</h3><p>Inicie a transmissão ou compartilhe o link para alguém entrar na sala.</p></div>}
+        <div className="stage-actions"><div><strong>{sharing ? "Sua tela está ao vivo" : "Sua tela, sua vez"}</strong><span>{sharing ? peers.length ? "Os participantes podem ver o que você compartilhou." : "Convide alguém com o link da sala para assistir." : "Escolha uma janela, tela ou monitor no navegador."}</span></div><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : startSharing}>{sharing ? "■ Parar transmissão" : "▣ Compartilhar tela"}</button></div>
       </section>
     </div>
   </main>;
