@@ -23,9 +23,6 @@ function useSources() {
     } catch { setError("Não foi possível listar as janelas."); }
     finally { setLoading(false); }
   };
-  useEffect(() => {
-    void window.lumenDesktop.listSources().then(setSources).catch(() => setError("Não foi possível listar as janelas."));
-  }, []);
   const select = async (source: CaptureSource) => {
     await window.lumenDesktop.selectSource(source.id);
     setSelected(source);
