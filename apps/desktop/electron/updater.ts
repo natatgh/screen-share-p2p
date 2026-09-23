@@ -11,6 +11,7 @@ const apiUrl = "https://api.github.com/repos/natatgh/screen-share-p2p/releases/l
 export type UpdateManifest = { version: string; asset: string; sha256: string; size: number };
 type ReleaseAsset = { name: string; browser_download_url: string };
 type Release = { tag_name: string; assets: ReleaseAsset[] };
+export type Distribution = "installed" | "standalone";
 let checking = false;
 
 export function newerVersion(candidate: string, current: string): boolean {
@@ -52,7 +53,7 @@ async function fetchText(asset: ReleaseAsset): Promise<Buffer> {
   return data;
 }
 
-export async function checkForUpdate(userData: string, current: string, notify: (status: string) => void): Promise<void> {
+export async function checkForUpdate(userData: string, current: string, notify: (status: string) => void, distribution: Distribution = "installed"): Promise<void> {
   if (checking) return;
   checking = true;
   try {
@@ -71,6 +72,11 @@ export async function checkForUpdate(userData: string, current: string, notify: 
     const signature = (await fetchText(signatureAsset)).toString("utf8");
     const manifest = verifyManifest(raw, signature);
     if (!manifest || manifest.version !== version) throw new Error("Assinatura da atualização inválida.");
+    if (distribution === "standalone") {
+      if (!asset(`Lumen-Desktop-${version}-Standalone.zip`)) throw new Error("ZIP standalone ausente da release.");
+      notify(`Nova versão ${version} disponível. Abra Releases e baixe o ZIP standalone.`);
+      return;
+    }
     const installerAsset = asset(manifest.asset);
     if (!installerAsset) throw new Error("Instalador ausente da release.");
     const updateDir = path.join(userData, "updates");
@@ -93,7 +99,8 @@ export async function checkForUpdate(userData: string, current: string, notify: 
   } finally { checking = false; }
 }
 
-export async function installPendingUpdate(userData: string, current: string): Promise<boolean> {
+export async function installPendingUpdate(userData: string, current: string, distribution: Distribution = "installed"): Promise<boolean> {
+  if (distribution === "standalone") return false;
   const updateDir = path.join(userData, "updates");
   try {
     const raw = await readFile(path.join(updateDir, "manifest.json"));

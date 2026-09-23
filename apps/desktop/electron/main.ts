@@ -1,8 +1,9 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, type DesktopCapturerSource } from "electron";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Readable } from "node:stream";
-import { checkForUpdate, installPendingUpdate } from "./updater";
+import { checkForUpdate, installPendingUpdate, type Distribution } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let sources = new Map<string, DesktopCapturerSource>();
@@ -76,7 +77,9 @@ async function createWindow(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
-  if (await installPendingUpdate(app.getPath("userData"), app.getVersion())) { app.quit(); return; }
+  const distribution: Distribution = app.isPackaged && existsSync(path.join(path.dirname(app.getPath("exe")), "Uninstall Lumen Desktop.exe"))
+    ? "installed" : "standalone";
+  if (await installPendingUpdate(app.getPath("userData"), app.getVersion(), distribution)) { app.quit(); return; }
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     if (selectedSource) callback({ video: selectedSource });
   });
@@ -102,12 +105,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("app:releases", async (event) => { trusted(event); await shell.openExternal(releasesUrl); });
   ipcMain.handle("update:check", async (event) => {
     trusted(event);
-    await checkForUpdate(app.getPath("userData"), app.getVersion(), (status) => mainWindow?.webContents.send("update:status", status));
+    await checkForUpdate(app.getPath("userData"), app.getVersion(), (status) => mainWindow?.webContents.send("update:status", status), distribution);
   });
   await createWindow();
   if (app.isPackaged) {
-    setTimeout(() => void checkForUpdate(app.getPath("userData"), app.getVersion(), (status) => mainWindow?.webContents.send("update:status", status)), 5000);
-    setInterval(() => void checkForUpdate(app.getPath("userData"), app.getVersion(), (status) => mainWindow?.webContents.send("update:status", status)), 6 * 60 * 60 * 1000);
+    setTimeout(() => void checkForUpdate(app.getPath("userData"), app.getVersion(), (status) => mainWindow?.webContents.send("update:status", status), distribution), 5000);
+    setInterval(() => void checkForUpdate(app.getPath("userData"), app.getVersion(), (status) => mainWindow?.webContents.send("update:status", status), distribution), 6 * 60 * 60 * 1000);
   }
 });
 
