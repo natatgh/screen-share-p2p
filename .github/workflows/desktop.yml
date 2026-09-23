@@ -44,6 +44,17 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --win nsis --publish never
+      - name: Package standalone ZIP
+        working-directory: apps/desktop
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $source = (Resolve-Path -LiteralPath 'release/win-unpacked').Path
+          $portable = Join-Path (Resolve-Path -LiteralPath 'release').Path 'Lumen Desktop'
+          Copy-Item -LiteralPath $source -Destination $portable -Recurse
+          $zip = Join-Path (Resolve-Path -LiteralPath 'release').Path "Lumen-Desktop-$version-Standalone.zip"
+          Compress-Archive -LiteralPath $portable -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path (Resolve-Path -LiteralPath 'release').Path "Lumen-Desktop-$version-Standalone.sha256"), "$hash  Lumen-Desktop-$version-Standalone.zip")
       - name: Sign update manifest
         if: startsWith(github.ref, 'refs/tags/')
         working-directory: apps/desktop
@@ -57,5 +68,8 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $installer = (Get-ChildItem -LiteralPath 'apps/desktop/release' -Filter 'Lumen-Desktop-*-Setup.exe' | Select-Object -First 1).FullName
-          gh release create $env:RELEASE_TAG $installer --draft --generate-notes --title "Lumen Desktop $env:RELEASE_TAG"
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $standalone = "apps/desktop/release/Lumen-Desktop-$version-Standalone.zip"
+          $checksum = "apps/desktop/release/Lumen-Desktop-$version-Standalone.sha256"
+          gh release create $env:RELEASE_TAG $installer $standalone $checksum --draft --generate-notes --title "Lumen Desktop $env:RELEASE_TAG"
           gh release upload $env:RELEASE_TAG apps/desktop/release/lumen-update.json apps/desktop/release/lumen-update.sig

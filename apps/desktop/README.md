@@ -13,7 +13,7 @@ O app suporta Windows 11 x64; as versões do Windows sem Process Loopback não t
 
 ## Releases e atualização
 
-`apps/desktop/package.json` é a versão do desktop. Uma tag `vX.Y.Z` que corresponde a ela inicia a Action Windows: testes, build nativo, instalador NSIS por usuário, manifesto e assinatura Ed25519. O resultado é uma **release em rascunho**. Publique-a depois de testar manualmente vídeo, áudio, instalação e atualização em Windows 11. Só releases publicadas são consultadas pelo app.
+`apps/desktop/package.json` é a versão do desktop. Uma tag `vX.Y.Z` que corresponde a ela inicia a Action Windows: testes, build nativo, instalador NSIS por usuário, ZIP portátil standalone com checksum SHA-256, manifesto e assinatura Ed25519. O resultado é uma **release em rascunho**. Para usar o standalone, extraia o ZIP inteiro e execute `Lumen Desktop.exe` dentro da pasta `Lumen Desktop`; ele não precisa de instalação. Publique a release depois de testar manualmente vídeo, áudio, instalação e atualização em Windows 11. Só releases publicadas são consultadas pelo app.
 
 O app baixa uma versão nova em segundo plano, verifica a assinatura do manifesto e o SHA-256 do instalador, e instala na próxima abertura. A chave pública fica no aplicativo; a chave privada deve ser guardada no secret `LUMEN_UPDATE_PRIVATE_KEY_B64` do GitHub em formato PEM codificado em Base64. Se a chave privada for perdida, usuários instalados precisarão reinstalar manualmente para confiar numa chave nova. O instalador não usa certificado Authenticode pago, então o SmartScreen pode exibir aviso.
 
