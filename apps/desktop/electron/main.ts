@@ -62,7 +62,7 @@ async function startAudio(): Promise<{ ok: boolean; error?: string }> {
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1140, height: 760, minWidth: 860, minHeight: 600,
-    backgroundColor: "#111719", title: "Lumen Desktop",
+    backgroundColor: "#111719", title: "Lumen Desktop", autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
