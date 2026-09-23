@@ -1,5 +1,7 @@
 # Roadmap
 
+O transmissor Windows em Electron usa áudio por processo. Próximos passos: validar captura em jogos e navegadores reais, reduzir cópias de áudio entre processos, observar CPU/FPS/latência e avaliar outras plataformas. Releases desktop são versionadas no GitHub com instalador e manifesto assinado; o site segue deploy independente.
+
 1. **Confiabilidade:** testes entre navegadores/redes, telemetria de estados ICE sem registrar SDP ou mídia, reconexão de tracks após falha.
 2. **Segurança de salas:** convite assinado, expiração, limite de participantes, canais privados e controle de acesso no signaling.
 3. **TURN no PC do usuário:** coturn com credenciais efêmeras, DNS/TLS, instruções de rede após autorização expressa. Medir custo de upload e disponibilidade.

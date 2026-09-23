@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.23)
+project(lumen_audio LANGUAGES CXX)
+add_executable(lumen-audio audio.cpp)
+target_compile_features(lumen-audio PRIVATE cxx_std_17)
+target_compile_definitions(lumen-audio PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(lumen-audio PRIVATE Ole32 Mmdevapi)

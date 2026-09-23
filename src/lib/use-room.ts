@@ -1,14 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { connectRoom, type Signal, type Signaling } from "./signaling";
+import { connectRoom, type Signal, type Signaling, type SignalingConfig } from "./signaling";
 import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, removeNonTabAudio, type StreamSettings } from "./stream-quality";
 
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[] };
 type Remote = { id: string; stream: MediaStream };
+export type RoomCapture = { start: (settings: StreamSettings) => Promise<MediaStream>; stop?: () => void };
+export type RoomOptions = { capture?: RoomCapture; signaling?: SignalingConfig };
 
-export function useRoom(room: string) {
+export function useRoom(room: string, options?: RoomOptions) {
+  const optionsRef = useRef(options);
+  useEffect(() => { optionsRef.current = options; }, [options]);
   const self = useRef<string>("");
   const signaling = useRef<Signaling | null>(null);
   const local = useRef<MediaStream | null>(null);
@@ -80,6 +84,7 @@ export function useRoom(room: string) {
     for (const id of [...outbound.current.keys()]) closeOutbound(id, true);
     local.current?.getTracks().forEach((track) => track.stop());
     local.current = null;
+    optionsRef.current?.capture?.stop?.();
     setLocalStream(null);
     setSharing(false);
   }, [closeOutbound]);
@@ -107,14 +112,16 @@ export function useRoom(room: string) {
 
   const startSharing = useCallback(async () => {
     setError("");
-    if (!navigator.mediaDevices?.getDisplayMedia) {
+    if (!optionsRef.current?.capture && !navigator.mediaDevices?.getDisplayMedia) {
       setError("Este navegador não permite capturar a tela neste contexto.");
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia(displayCaptureOptions(settingsRef.current));
+      const stream = optionsRef.current?.capture
+        ? await optionsRef.current.capture.start(settingsRef.current)
+        : await navigator.mediaDevices.getDisplayMedia(displayCaptureOptions(settingsRef.current));
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
-      removeNonTabAudio(stream);
+      if (!optionsRef.current?.capture) removeNonTabAudio(stream);
       stream.getVideoTracks()[0].contentHint = contentHintForSettings(settingsRef.current);
       local.current = stream;
       setLocalStream(stream);
@@ -191,7 +198,7 @@ export function useRoom(room: string) {
           else link.pending.push(candidate);
         }
       },
-    });
+    }, optionsRef.current?.signaling);
     return () => {
       signaling.current?.close();
       for (const link of currentOutbound.values()) link.pc.close();
@@ -199,6 +206,7 @@ export function useRoom(room: string) {
       currentOutbound.clear(); currentInbound.clear();
       local.current?.getTracks().forEach((track) => track.stop());
       local.current = null;
+      optionsRef.current?.capture?.stop?.();
     };
   }, [room, closeInbound, closeOutbound, send, startOutbound]);
 

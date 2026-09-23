@@ -1,0 +1,41 @@
+{
+  "name": "lumen-desktop",
+  "productName": "Lumen Desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist-main/main.js",
+  "scripts": {
+    "predev": "node node_modules/electron/install.js",
+    "dev": "npm run build && electron .",
+    "build": "vite build && tsc -p tsconfig.main.json",
+    "package:win": "npm run build && electron-builder --win nsis --publish never",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.1",
+    "lucide-react": "^0.468.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "8.3.0"
+  },
+  "build": {
+    "appId": "app.lumen.desktop",
+    "productName": "Lumen Desktop",
+    "directories": { "output": "release" },
+    "files": ["dist-main/**/*", "dist-renderer/**/*", "package.json"],
+    "extraResources": [{ "from": "native/build/Release/lumen-audio.exe", "to": "native/lumen-audio.exe" }],
+    "win": { "target": "nsis", "artifactName": "Lumen-Desktop-${version}-Setup.exe" },
+    "nsis": { "oneClick": true, "perMachine": false, "allowElevation": false }
+  }
+}

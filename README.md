@@ -2,6 +2,8 @@
 
 MVP de salas temporárias para compartilhar tela, janela ou monitor pelo navegador. Qualquer participante pode transmitir; os demais podem assistir. Sem conta, sem gravação, sem LiveKit ou coturn.
 
+O transmissor **Lumen Desktop para Windows 11** fica em `apps/desktop`. Ele entra nas mesmas salas e permite capturar vídeo de uma janela ou monitor e, para janelas, áudio do processo do aplicativo. Espectadores continuam usando a página web. Veja [as instruções do desktop](apps/desktop/README.md).
+
 ## Rodar localmente
 
 Requisitos: Node.js 20.9+ e npm.

@@ -22,24 +22,30 @@ type Callbacks = {
   onStatus: (status: string) => void;
 };
 
-export function connectRoom(room: string, self: string, callbacks: Callbacks): Signaling {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export type SignalingConfig = { url?: string; key?: string; localHost?: string; production?: boolean };
+
+export function connectRoom(room: string, self: string, callbacks: Callbacks, config: SignalingConfig = {
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  localHost: process.env.NEXT_PUBLIC_LOCAL_SIGNAL_HOST,
+  production: process.env.NODE_ENV === "production",
+}): Signaling {
+  const { url, key } = config;
   if (url && key) return connectSupabase(room, self, url, key, callbacks);
-  if (process.env.NODE_ENV === "production") {
+  if (config.production) {
     callbacks.onStatus("Configure o Supabase Realtime para usar salas no deploy.");
     return { send() {}, close() {} };
   }
-  return connectLocal(room, self, callbacks);
+  return connectLocal(room, self, callbacks, config.localHost);
 }
 
-function connectLocal(room: string, self: string, cb: Callbacks): Signaling {
+function connectLocal(room: string, self: string, cb: Callbacks, localHost?: string): Signaling {
   let socket: WebSocket | null = null;
   let closed = false;
   let retry: ReturnType<typeof setTimeout> | undefined;
   const open = () => {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const host = process.env.NEXT_PUBLIC_LOCAL_SIGNAL_HOST || location.hostname;
+    const host = localHost || location.hostname;
     socket = new WebSocket(`${protocol}//${host}:3001/?room=${room}&id=${self}`);
     cb.onStatus("Conectando à sala…");
     socket.onopen = () => cb.onStatus("Conectado");

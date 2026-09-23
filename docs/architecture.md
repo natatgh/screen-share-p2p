@@ -1,5 +1,7 @@
 # Arquitetura
 
+O transmissor Windows em `apps/desktop` reaproveita `useRoom` e `signaling.ts` com um adaptador de captura. O Electron lista fontes e seleciona o vídeo; o auxiliar C++ usa o HWND da janela para localizar o processo e capturar PCM somente da árvore desse processo. Um AudioWorklet converte PCM em trilha de áudio WebRTC. O sinal e a mídia seguem o mesmo protocolo P2P usado pelo navegador. O desktop não adiciona servidores à Vercel nem ao Supabase.
+
 ```text
 Navegador A ── SDP / ICE / presença ── signaling ── SDP / ICE / presença ── Navegador B
      └──────────────────── mídia WebRTC P2P ────────────────────────────────┘
