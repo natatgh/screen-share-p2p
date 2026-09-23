@@ -1,6 +1,6 @@
 # Candidatura à SignPath Foundation
 
-O programa gratuito é destinado a projetos open source aceitos pela SignPath Foundation. A candidatura e cada solicitação de assinatura estão sujeitas à aprovação da fundação; não há assinatura Authenticode configurada neste momento.
+O programa gratuito é destinado a projetos open source aceitos pela SignPath Foundation. A candidatura do Lumen Desktop foi enviada em 23/09/2026 e o site confirmou o recebimento; a análise ainda está pendente. Cada solicitação de assinatura estará sujeita à aprovação da fundação; não há assinatura Authenticode configurada neste momento.
 
 ## Dados públicos do projeto
 
@@ -22,7 +22,7 @@ O programa gratuito é destinado a projetos open source aceitos pela SignPath Fo
 ## Passos que exigem a conta do mantenedor
 
 1. Conferir que a conta GitHub usa autenticação multifator.
-2. Enviar a candidatura em https://signpath.org/apply.html usando os links acima; criar a conta SignPath com autenticação multifator quando solicitado.
+2. Candidatura enviada em https://signpath.org/apply.html usando os links acima. Configurar a conta SignPath com autenticação multifator quando solicitado.
 3. Aguardar a análise da SignPath Foundation. A aprovação não é automática e pode depender da reputação verificável do projeto.
 4. Após a aceitação, configurar o projeto, a integração com o GitHub e a política de aprovação no SignPath. Só então integrar os identificadores e o token de API ao workflow de release.
 5. Aprovar manualmente cada pedido de assinatura e conferir a assinatura Authenticode dos artefatos antes de publicar a release.

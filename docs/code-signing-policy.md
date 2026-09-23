@@ -1,6 +1,6 @@
 # Code signing policy
 
-**Status:** candidatura ao programa gratuito para projetos open source da SignPath Foundation em preparação. Nenhuma assinatura de código Authenticode está configurada. As releases até `v0.2.2` são executáveis não assinados e podem ser bloqueadas pelo Smart App Control do Windows. A assinatura Ed25519 do manifesto de atualização verifica o download feito pelo Lumen, mas não autentica o executável perante o Windows.
+**Status:** candidatura ao programa gratuito para projetos open source da SignPath Foundation enviada em 23/09/2026, aguardando análise. Nenhuma assinatura de código Authenticode está configurada. As releases até `v0.2.2` são executáveis não assinados e podem ser bloqueadas pelo Smart App Control do Windows. A assinatura Ed25519 do manifesto de atualização verifica o download feito pelo Lumen, mas não autentica o executável perante o Windows.
 
 O projeto não solicita que usuários desativem o Smart App Control nem instalem certificados locais para executar uma release. A assinatura via SignPath depende da aceitação da candidatura e da configuração do projeto. Nenhum download será descrito como assinado antes de verificarmos sua assinatura Authenticode.
 

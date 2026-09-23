@@ -51,7 +51,7 @@ Os canais Realtime são públicos e o código é a única barreira de entrada. O
 
 ## Assinatura do aplicativo Windows
 
-O Lumen prepara uma candidatura ao programa gratuito para projetos open source da SignPath Foundation. As builds atuais ainda não têm assinatura Authenticode. Veja a [Code signing policy](docs/code-signing-policy.md) e os [downloads](docs/downloads.md). Após a aprovação e a primeira build assinada, o crédito exigido pelo programa será: **Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/)**.
+O Lumen enviou uma candidatura ao programa gratuito para projetos open source da SignPath Foundation e aguarda análise. As builds atuais ainda não têm assinatura Authenticode. Veja a [Code signing policy](docs/code-signing-policy.md) e os [downloads](docs/downloads.md). Após a aprovação e a primeira build assinada, o crédito exigido pelo programa será: **Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/)**.
 
 ## Limitações do MVP
 
