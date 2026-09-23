@@ -13,6 +13,8 @@ npm run dev
 
 Abra http://localhost:3000, crie uma sala e abra o link em outra aba ou navegador. `npm run dev` inicia o site na porta 3000 e o servidor de signaling na 3001. A captura de tela exige contexto seguro: localhost funciona; para acessar por outro dispositivo use HTTPS.
 
+Na sala, escolha a qualidade antes ou durante o compartilhamento: **Alta** preserva a resolução capturada, **Equilibrada** limita a até 1080p e **Economia** limita a até 720p. O limite de envio é aplicado por espectador; a qualidade efetiva depende da rede, do navegador e da resolução da tela de origem.
+
 ## Deploy gratuito
 
 1. Crie um projeto no plano gratuito do Supabase e copie a URL e a chave **publishable** no painel Connect.

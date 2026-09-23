@@ -15,3 +15,7 @@
 ## ADR 004 — Sem TURN/SFU no MVP
 
 **Decisão:** somente STUN público. **Motivo:** TURN/SFU exigiriam recursos de rede e operação fora da Vercel Hobby; não há autorização para configurar o PC ou roteador do usuário. **Consequência:** algumas redes corporativas, móveis ou NAT simétrico não conectarão.
+
+## ADR 005 — Priorizar a nitidez de texto
+
+**Decisão:** capturar a tela com preferência de até 30 quadros por segundo, marcar o vídeo como texto e oferecer três perfis ajustáveis durante a transmissão: Alta (resolução original, até 6 Mb/s e 30 fps), Equilibrada (até 1080p, 3 Mb/s e 30 fps) e Economia (até 720p, 1 Mb/s e 15 fps). O perfil Alta prefere manter a resolução quando a rede estiver congestionada. **Motivo:** a leitura de interfaces e texto é o uso principal do compartilhamento de tela, mas cada pessoa pode escolher o consumo de rede. **Consequência:** o navegador ainda adapta o envio à conexão e pode ignorar parâmetros não suportados; os valores são tetos, não garantias, e cada espectador consome upload adicional.
