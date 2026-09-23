@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { connectRoom, type Signal, type Signaling } from "./signaling";
-import { applyScreenQuality, type StreamQuality } from "./stream-quality";
+import { applyScreenQuality, contentHintForQuality, type StreamQuality } from "./stream-quality";
 
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[] };
@@ -15,12 +15,12 @@ export function useRoom(room: string) {
   const outbound = useRef(new Map<string, Link>());
   const inbound = useRef(new Map<string, Link>());
   const peersRef = useRef<string[]>([]);
-  const qualityRef = useRef<StreamQuality>("high");
+  const qualityRef = useRef<StreamQuality>("balanced");
   const [peers, setPeers] = useState<string[]>([]);
   const [remotes, setRemotes] = useState<Remote[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [quality, setQualityState] = useState<StreamQuality>("high");
+  const [quality, setQualityState] = useState<StreamQuality>("balanced");
   const [status, setStatus] = useState("Conectando…");
   const [error, setError] = useState("");
 
@@ -86,6 +86,8 @@ export function useRoom(room: string) {
   const setQuality = useCallback((next: StreamQuality) => {
     qualityRef.current = next;
     setQualityState(next);
+    const videoTrack = local.current?.getVideoTracks()[0];
+    if (videoTrack) videoTrack.contentHint = contentHintForQuality(next);
     for (const link of outbound.current.values()) {
       for (const sender of link.pc.getSenders()) {
         if (sender.track?.kind === "video") void applyScreenQuality(sender, next);
@@ -102,7 +104,7 @@ export function useRoom(room: string) {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30 } }, audio: true });
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
-      stream.getVideoTracks()[0].contentHint = "text";
+      stream.getVideoTracks()[0].contentHint = contentHintForQuality(qualityRef.current);
       local.current = stream;
       setLocalStream(stream);
       stream.getVideoTracks()[0].addEventListener("ended", stopSharing, { once: true });

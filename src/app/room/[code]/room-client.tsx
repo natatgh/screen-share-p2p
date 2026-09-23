@@ -61,17 +61,8 @@ function VideoPlayer({ screen }: { screen: Screen }) {
 }
 
 function StreamThumb({ screen, selected, onSelect }: { screen: Screen; selected: boolean; onSelect: () => void }) {
-  const video = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const element = video.current;
-    if (!element) return;
-    element.srcObject = screen.stream;
-    void element.play().catch(() => {});
-    return () => { element.srcObject = null; };
-  }, [screen.stream]);
-
   return <button className={`stream-thumb ${selected ? "selected" : ""}`} onClick={onSelect} aria-pressed={selected} aria-label={`Destacar ${screen.label}`}>
-    <video ref={video} autoPlay playsInline muted aria-hidden="true" />
+    <span className="stream-thumb-icon"><MonitorPlay size={28} strokeWidth={1.5} /></span>
     <span><span className="live-dot" /> {screen.label}</span>
   </button>;
 }
@@ -123,7 +114,7 @@ export default function RoomClient({ code }: { code: string }) {
 
         {featured ? <div className="player-layout"><VideoPlayer key={featured.id} screen={featured} />{streams.length > 1 && <div className="stream-rail" aria-label="Outras transmissões"><div className="rail-heading">Telas na sala <span>{streams.length}</span></div><div className="stream-thumbs">{streams.map((screen) => <StreamThumb key={screen.id} screen={screen} selected={screen.id === featured.id} onSelect={() => setSelectedId(screen.id)} />)}</div></div>}</div> : <div className="empty-stage"><div className="empty-visual"><MonitorPlay size={42} strokeWidth={1.4} /><span><Expand size={16} /></span></div><h3>Nenhuma tela compartilhada</h3><p>Inicie uma transmissão ou copie o link para convidar alguém.</p><button className="empty-invite" onClick={copy}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? "Link copiado" : "Copiar convite"}</button></div>}
 
-        <div className="stage-actions"><div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? peers.length ? "Os participantes podem assistir ao que você compartilhou." : "Convide alguém para assistir." : "Escolha uma janela, aba ou monitor no navegador."}</span></div></div><div className="stage-controls"><label className="quality-control">Qualidade <ChevronDown size={14} /><select value={quality} onChange={(event) => setQuality(event.target.value as StreamQuality)}><option value="high">Alta · original · até 6 Mb/s</option><option value="balanced">Equilibrada · 1080p · até 3 Mb/s</option><option value="dataSaver">Economia · 720p · até 1 Mb/s</option></select></label><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : beginSharing} disabled={startingShare}>{sharing ? <Square size={16} fill="currentColor" /> : <ScreenShare size={18} />}{sharing ? "Parar transmissão" : startingShare ? "Abrindo captura…" : "Compartilhar tela"}</button></div></div>
+        <div className="stage-actions"><div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? peers.length ? "Os participantes podem assistir ao que você compartilhou." : "Convide alguém para assistir." : "Escolha uma janela, aba ou monitor no navegador."}</span></div></div><div className="stage-controls"><label className="quality-control">Qualidade <ChevronDown size={14} /><select value={quality} onChange={(event) => setQuality(event.target.value as StreamQuality)}><option value="balanced">Equilibrada · 1080p · até 3 Mb/s</option><option value="smooth">Fluidez · 720p · até 2,5 Mb/s</option><option value="high">Alta · original · até 6 Mb/s</option><option value="dataSaver">Economia · 720p · até 1 Mb/s</option></select></label><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : beginSharing} disabled={startingShare}>{sharing ? <Square size={16} fill="currentColor" /> : <ScreenShare size={18} />}{sharing ? "Parar transmissão" : startingShare ? "Abrindo captura…" : "Compartilhar tela"}</button></div></div>
       </section>
     </div>
   </main>;

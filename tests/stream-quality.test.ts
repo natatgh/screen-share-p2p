@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyScreenQuality, encodingForQuality } from "../src/lib/stream-quality";
+import { applyScreenQuality, contentHintForQuality, encodingForQuality } from "../src/lib/stream-quality";
 
 test("quality presets preserve native resolution or scale large captures", () => {
   assert.deepEqual(encodingForQuality("high", 2160), {
@@ -13,6 +13,11 @@ test("quality presets preserve native resolution or scale large captures", () =>
     maxBitrate: 1_000_000, maxFramerate: 15, scaleResolutionDownBy: 3,
   });
   assert.equal(encodingForQuality("dataSaver", 720).scaleResolutionDownBy, 1);
+  assert.deepEqual(encodingForQuality("smooth", 1440), {
+    maxBitrate: 2_500_000, maxFramerate: 30, scaleResolutionDownBy: 2,
+  });
+  assert.equal(contentHintForQuality("smooth"), "motion");
+  assert.equal(contentHintForQuality("balanced"), "detail");
 });
 
 test("switching quality updates the active video sender", async () => {
