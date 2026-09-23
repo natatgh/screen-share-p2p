@@ -43,6 +43,9 @@ Os canais Realtime são públicos e o código é a única barreira de entrada. O
 - [Arquitetura e limites](docs/architecture.md)
 - [Decisões técnicas](docs/decisions.md)
 - [Roadmap](docs/roadmap.md)
+- [Code signing policy](docs/code-signing-policy.md)
+- [Privacidade](PRIVACY.md)
+- [Licença MIT](LICENSE)
 
 ## Limitações do MVP
 
