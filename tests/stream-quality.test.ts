@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, encodingForSettings } from "../src/lib/stream-quality";
+import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, encodingForSettings, removeNonTabAudio } from "../src/lib/stream-quality";
 
 test("resolution and frame rate can be selected independently", () => {
   assert.deepEqual(defaultStreamSettings, { mode: "balanced", resolution: 1080, frameRate: 30 });
@@ -32,4 +32,36 @@ test("changing settings updates the video sender", async () => {
   assert.equal(applied?.encodings[0].maxBitrate, 4_000_000);
   assert.equal(applied?.encodings[0].maxFramerate, 60);
   assert.equal(applied?.degradationPreference, "maintain-framerate");
+});
+
+test("capture offers tab audio but excludes window and system audio", () => {
+  const options = displayCaptureOptions(defaultStreamSettings);
+  assert.equal(options.audio, true);
+  assert.equal(options.systemAudio, "exclude");
+  assert.equal(options.windowAudio, "exclude");
+  assert.equal((options.video as MediaTrackConstraints).displaySurface, "window");
+});
+
+test("non-tab capture never retains its audio track", () => {
+  let stopped = false;
+  let removed = false;
+  const audio = { stop: () => { stopped = true; } } as MediaStreamTrack;
+  const stream = {
+    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: "monitor" }) }],
+    getAudioTracks: () => [audio],
+    removeTrack: (track: MediaStreamTrack) => { removed = track === audio; },
+  } as unknown as MediaStream;
+  assert.equal(removeNonTabAudio(stream), true);
+  assert.equal(stopped, true);
+  assert.equal(removed, true);
+});
+
+test("tab capture keeps its own audio track", () => {
+  let stopped = false;
+  const stream = {
+    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: "browser" }) }],
+    getAudioTracks: () => [{ stop: () => { stopped = true; } }],
+  } as unknown as MediaStream;
+  assert.equal(removeNonTabAudio(stream), false);
+  assert.equal(stopped, false);
 });

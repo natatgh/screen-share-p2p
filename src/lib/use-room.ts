@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { connectRoom, type Signal, type Signaling } from "./signaling";
-import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, type StreamSettings } from "./stream-quality";
+import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, removeNonTabAudio, type StreamSettings } from "./stream-quality";
 
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[] };
@@ -112,8 +112,9 @@ export function useRoom(room: string) {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: captureConstraintsForSettings(settingsRef.current), audio: true });
+      const stream = await navigator.mediaDevices.getDisplayMedia(displayCaptureOptions(settingsRef.current));
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
+      removeNonTabAudio(stream);
       stream.getVideoTracks()[0].contentHint = contentHintForSettings(settingsRef.current);
       local.current = stream;
       setLocalStream(stream);

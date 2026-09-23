@@ -15,6 +15,8 @@ Abra http://localhost:3000, crie uma sala e abra o link em outra aba ou navegado
 
 Na sala, abra **Qualidade** para escolher a preferência de codificação (Equilibrado, Vídeo mais fluido ou Texto mais nítido), a resolução (720p, 1080p ou Original) e os quadros por segundo (15, 30 ou 60). O padrão é Equilibrado, 1080p e 30 FPS. É possível mudar os ajustes durante a transmissão; o app tenta atualizar a captura e os envios ativos. O navegador pode limitar a qualidade efetiva. Cada espectador consome upload adicional, especialmente em 60 FPS.
 
+Na captura, o app sugere a seleção de uma janela, mas compartilha áudio **somente quando uma aba do navegador é selecionada**. O áudio de janelas e monitores é desativado, mesmo se o navegador devolver uma trilha de áudio, pois Chrome e Edge ainda não oferecem uma forma confiável de limitar a captura de áudio a uma janela específica. A sala mostra quando não há áudio compartilhado.
+
 ## Deploy gratuito
 
 1. Crie um projeto no plano gratuito do Supabase e copie a URL e a chave **publishable** no painel Connect.

@@ -19,3 +19,7 @@
 ## ADR 005 — Perfis de qualidade ajustáveis
 
 **Decisão:** oferecer preferência de codificação (Equilibrado, Vídeo mais fluido, Texto mais nítido), resolução (720p, 1080p, Original) e taxa de quadros (15, 30, 60 FPS) como controles independentes. O padrão é Equilibrado, 1080p e 30 FPS. Os tetos de bitrate variam com resolução e FPS (1,2 a 8 Mb/s por espectador). Ao mudar durante a transmissão, atualizar as restrições da captura e os parâmetros dos envios WebRTC; avisar quando o navegador rejeitar um ajuste. **Motivo:** permitir escolher nitidez ou fluidez conforme o conteúdo e a capacidade do computador. **Consequência:** os valores são pedidos ao navegador, não garantias; 60 FPS e resolução Original podem aumentar CPU e upload proporcionalmente ao número de espectadores.
+
+## ADR 006 — Áudio limitado à fonte compartilhada
+
+**Decisão:** solicitar `systemAudio: "exclude"` e `windowAudio: "exclude"` na captura e descartar qualquer trilha de áudio devolvida quando a fonte não for uma aba do navegador. **Motivo:** Chrome e Edge ainda não oferecem suporte confiável a `windowAudio: "window"`; uma janela pode vir acompanhada de áudio do sistema. **Consequência:** abas podem compartilhar áudio; janelas e monitores compartilham apenas vídeo até existir uma captura de áudio por aplicativo confiável. A seleção final da fonte continua sob controle do usuário.

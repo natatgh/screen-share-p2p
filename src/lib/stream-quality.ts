@@ -32,6 +32,26 @@ export function captureConstraintsForSettings(settings: StreamSettings): MediaTr
   };
 }
 
+type ScopedDisplayMediaOptions = DisplayMediaStreamOptions & { systemAudio: "exclude"; windowAudio: "exclude" };
+
+export function displayCaptureOptions(settings: StreamSettings): ScopedDisplayMediaOptions {
+  return {
+    video: { ...captureConstraintsForSettings(settings), displaySurface: "window" },
+    audio: true,
+    systemAudio: "exclude",
+    windowAudio: "exclude",
+  };
+}
+
+export function removeNonTabAudio(stream: MediaStream): boolean {
+  if (stream.getVideoTracks()[0]?.getSettings().displaySurface === "browser") return false;
+  for (const track of stream.getAudioTracks()) {
+    track.stop();
+    stream.removeTrack(track);
+  }
+  return true;
+}
+
 export function encodingForSettings(settings: StreamSettings, sourceHeight?: number): RTCRtpEncodingParameters {
   const targetHeight = settings.resolution === "source" ? Infinity : settings.resolution;
   return {
