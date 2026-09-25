@@ -58,8 +58,10 @@ jobs:
           $version = (Get-Content 'apps/desktop/package.json' | ConvertFrom-Json).version
           node apps/desktop/scripts/check-version.mjs "v$version"
           if ($LASTEXITCODE -ne 0) { throw 'Versão do Desktop inválida.' }
-          $draft = gh release view "v$version" --json isDraft --jq .isDraft 2>$null
-          if ($LASTEXITCODE -eq 0 -and $draft -eq 'false') {
+          $releases = gh release list --limit 100 --json tagName,isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao consultar releases existentes.' }
+          $existing = $releases | Where-Object { $_.tagName -eq "v$version" } | Select-Object -First 1
+          if ($null -ne $existing -and -not $existing.isDraft) {
             "needed=false" >> $env:GITHUB_OUTPUT
           } else {
             "needed=true" >> $env:GITHUB_OUTPUT
@@ -100,9 +102,11 @@ jobs:
           $standalone = "apps/desktop/release/Lumen-Desktop-$env:RELEASE_VERSION-Standalone.zip"
           $checksum = "apps/desktop/release/Lumen-Desktop-$env:RELEASE_VERSION-Standalone.sha256"
           $assets = @($installer, $standalone, $checksum, 'apps/desktop/release/lumen-update.json', 'apps/desktop/release/lumen-update.sig')
-          $draft = gh release view $tag --json isDraft --jq .isDraft 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            if ($draft -ne 'true') { throw 'A release já foi publicada por outro processo.' }
+          $releases = gh release list --limit 100 --json tagName,isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao consultar releases existentes.' }
+          $existing = $releases | Where-Object { $_.tagName -eq $tag } | Select-Object -First 1
+          if ($null -ne $existing) {
+            if (-not $existing.isDraft) { throw 'A release já foi publicada por outro processo.' }
             gh release upload $tag @assets --clobber
           } else {
             gh release create $tag @assets --draft --target $env:GITHUB_SHA --generate-notes --title "Lumen Desktop $tag"
