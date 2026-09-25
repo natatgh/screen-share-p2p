@@ -3,3 +3,15 @@
 .preview-thumbnail{position:relative;width:100%;height:320px;border-radius:9px;background:#0c1216;overflow:hidden}.preview-thumbnail img{width:100%;height:100%;object-fit:contain}.preview-thumbnail span{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;background:linear-gradient(transparent,#050a0ae8);color:#d5f4df;font-size:11px}.modal-body .preview-thumbnail{height:272px}
 .members-area{flex:1;display:flex;flex-direction:column;gap:20px;margin-top:22px}.member-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.member-tile{min-height:185px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;border:1px solid #354740;border-radius:14px;background:#1d2927}.member-avatar{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:#34473d;color:#d8f5df;font-size:25px;font-weight:800}.member-avatar.self{background:#285a45;color:#d5ffe5}.member-tile strong{font-size:13px}.member-tile small{color:#91aca0;font-size:11px}.members-cta{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid #3d5748;border-radius:12px;background:#1a2923;padding:17px;color:#b6d1bf;font-size:12px}
 .brand-icon{display:block;object-fit:contain;background:transparent}
+
+/* The title bar shares its row with the native Windows window controls. */
+.topbar{height:48px;padding:0;user-select:none;app-region:drag;-webkit-app-region:drag}
+.topbar-safe{height:100%;margin-left:env(titlebar-area-x,0px);width:env(titlebar-area-width,calc(100% - 138px));display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 16px}
+.topbar .brand{flex:none;gap:7px;font-size:17px;letter-spacing:-.6px}
+.topbar .brand-icon{width:27px;height:27px;border-radius:7px}
+.topbar .desktop-label{margin-left:3px;padding:3px 5px;font-size:8px}
+.topbar-right{min-width:0;gap:12px}
+.topbar .room-code{white-space:nowrap;font-size:11px}
+.topbar .connection{white-space:nowrap;padding:5px 9px;font-size:10px}
+.content,.room-workspace{min-height:calc(100vh - 48px)}
+.entry{min-height:calc(100vh - 48px)}

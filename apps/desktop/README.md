@@ -11,6 +11,8 @@ Aplicativo Electron para assistir e compartilhar nas salas do Lumen. Entrar numa
 
 O app suporta Windows 11 x64; as versões do Windows sem Process Loopback não têm áudio por aplicativo. A captura usa STUN e a mesma malha P2P do site: algumas redes exigirão TURN e cada espectador adiciona carga de upload/CPU.
 
+A barra superior usa o conteúdo do app com os controles nativos do Windows sobrepostos pelo Electron. Arraste a faixa superior para mover a janela ou dê dois cliques para maximizar/restaurar.
+
 ## Identidade visual
 
 O ícone do aplicativo fica em `assets/lumen-icon.png`. O arquivo `assets/lumen-icon.ico` contém os tamanhos usados pelo Windows no executável e no instalador. Depois de alterar o PNG, execute `powershell -File scripts/build-icon.ps1` em `apps/desktop` para atualizar o ICO antes de empacotar.

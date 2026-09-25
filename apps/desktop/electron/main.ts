@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell, type DesktopCapturerSource } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, session, shell, type DesktopCapturerSource } from "electron";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -66,7 +66,9 @@ async function createWindow(): Promise<void> {
     : path.join(__dirname, "..", "assets", "lumen-icon.png");
   mainWindow = new BrowserWindow({
     width: 1140, height: 760, minWidth: 860, minHeight: 600,
-    backgroundColor: "#111719", title: "Lumen Desktop", icon, autoHideMenuBar: true,
+    backgroundColor: "#141a1e", title: "Lumen Desktop", icon,
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#141a1e", symbolColor: "#edf8f1", height: 48 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
@@ -82,6 +84,7 @@ async function createWindow(): Promise<void> {
 if (process.platform === "win32") app.setAppUserModelId("app.lumen.desktop");
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null);
   const distribution: Distribution = app.isPackaged && existsSync(path.join(path.dirname(app.getPath("exe")), "Uninstall Lumen Desktop.exe"))
     ? "installed" : "standalone";
   if (await installPendingUpdate(app.getPath("userData"), app.getVersion(), distribution)) { app.quit(); return; }
