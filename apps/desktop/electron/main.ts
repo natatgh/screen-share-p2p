@@ -61,9 +61,12 @@ async function startAudio(): Promise<{ ok: boolean; error?: string }> {
 }
 
 async function createWindow(): Promise<void> {
+  const icon = app.isPackaged
+    ? path.join(process.resourcesPath, "assets", "lumen-icon.png")
+    : path.join(__dirname, "..", "assets", "lumen-icon.png");
   mainWindow = new BrowserWindow({
     width: 1140, height: 760, minWidth: 860, minHeight: 600,
-    backgroundColor: "#111719", title: "Lumen Desktop", autoHideMenuBar: true,
+    backgroundColor: "#111719", title: "Lumen Desktop", icon, autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
@@ -75,6 +78,8 @@ async function createWindow(): Promise<void> {
   else await mainWindow.loadFile(path.join(__dirname, "..", "dist-renderer", "index.html"));
   mainWindow.on("closed", () => { mainWindow = null; stopAudio(); });
 }
+
+if (process.platform === "win32") app.setAppUserModelId("app.lumen.desktop");
 
 app.whenReady().then(async () => {
   const distribution: Distribution = app.isPackaged && existsSync(path.join(path.dirname(app.getPath("exe")), "Uninstall Lumen Desktop.exe"))

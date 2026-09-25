@@ -7,7 +7,12 @@ import { ConnectionDiagnostics } from "../../../src/components/connection-diagno
 import { captureConstraintsForSettings, type StreamFrameRate, type StreamMode, type StreamResolution, type StreamSettings } from "../../../src/lib/stream-quality";
 import type { CaptureSource } from "./types";
 import workletUrl from "./pcm-worklet.js?url";
+import lumenIconUrl from "../assets/lumen-icon.png";
 import "./style.css";
+
+function LogoMark() {
+  return <img className="brand-icon" src={lumenIconUrl} alt="" />;
+}
 
 function useSources() {
   const [sources, setSources] = useState<CaptureSource[]>([]);
@@ -135,7 +140,7 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
   const copy = async () => { await navigator.clipboard.writeText(invite); setCopied(true); setTimeout(() => setCopied(false), 2200); };
 
   return <div className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-icon"><MonitorPlay size={21} /></span>Lumen<span className="mint">.</span><span className="desktop-label">DESKTOP</span></div><div className="topbar-right"><span className="room-code">Sala <b>{code}</b></span><span className={`connection ${status === "Conectado" ? "online" : ""}`}><span />{status}</span></div></header>
+    <header className="topbar"><div className="brand"><LogoMark />Lumen<span className="mint">.</span><span className="desktop-label">DESKTOP</span></div><div className="topbar-right"><span className="room-code">Sala <b>{code}</b></span><span className={`connection ${status === "Conectado" ? "online" : ""}`}><span />{status}</span></div></header>
     <main className="content"><aside className="sidebar"><div className="sidebar-top"><span className="eyebrow">SUA SALA</span><h1>{code}</h1><p>Assista às transmissões ou compartilhe sua tela quando quiser.</p></div>
       <div className="sidebar-section"><div className="section-heading">CONVITE</div><div className="invite-box"><span>{code}</span><button onClick={() => void copy()} title="Copiar link da sala">{copied ? <Check size={17} /> : <Copy size={17} />}</button></div><small>{copied ? "Link copiado" : "Convide pessoas pelo link"}</small></div>
       <div className="sidebar-section"><div className="section-heading people-heading"><span><Users size={14} /> PARTICIPANTES</span><b>{peers.length + 1}</b></div><div className="person"><span className="avatar self">V</span><span><b>Você</b><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></span>{sharing && <Radio size={14} />}</div>{peers.map((peer, index) => <div className="person" key={peer}><span className="avatar">{index + 1}</span><span><b>Participante {index + 1}</b><small>{remotes.some((remote) => remote.id === peer) ? "Transmitindo agora" : "Na sala"}</small></span>{remotes.some((remote) => remote.id === peer) && <Radio size={14} />}</div>)}</div>
@@ -158,7 +163,7 @@ function App() {
   const [message, setMessage] = useState("");
   if (code) return <Session code={code} leave={() => setCode(null)} />;
   const join = () => { const normalized = normalizeRoom(input); if (isValidRoom(normalized)) setCode(normalized); else setMessage("Digite um código de sala com oito caracteres."); };
-  return <div className="entry"><div className="entry-card"><span className="brand-icon"><MonitorPlay size={24} /></span><span className="eyebrow">LUMEN DESKTOP</span><h1>Entre e fique à vontade.</h1><p>Assista às transmissões da sala ou compartilhe uma janela ou monitor quando quiser.</p><button className="go-live" onClick={() => setCode(createRoom())}>Criar sala</button><div className="entry-divider">ou entre numa sala</div><div className="join"><input value={input} maxLength={8} onChange={(e) => setInput(normalizeRoom(e.target.value))} onKeyDown={(e) => { if (e.key === "Enter") join(); }} placeholder="CÓDIGO DA SALA" aria-label="Código da sala" /><button onClick={join}>Entrar</button></div>{message && <small className="warning">{message}</small>}</div></div>;
+  return <div className="entry"><div className="entry-card"><LogoMark /><span className="eyebrow">LUMEN DESKTOP</span><h1>Entre e fique à vontade.</h1><p>Assista às transmissões da sala ou compartilhe uma janela ou monitor quando quiser.</p><button className="go-live" onClick={() => setCode(createRoom())}>Criar sala</button><div className="entry-divider">ou entre numa sala</div><div className="join"><input value={input} maxLength={8} onChange={(e) => setInput(normalizeRoom(e.target.value))} onKeyDown={(e) => { if (e.key === "Enter") join(); }} placeholder="CÓDIGO DA SALA" aria-label="Código da sala" /><button onClick={join}>Entrar</button></div>{message && <small className="warning">{message}</small>}</div></div>;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

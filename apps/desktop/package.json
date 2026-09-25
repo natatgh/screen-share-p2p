@@ -1,7 +1,7 @@
 {
   "name": "lumen-desktop",
   "productName": "Lumen Desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "main": "dist-main/main.js",
   "scripts": {
@@ -32,10 +32,35 @@
   "build": {
     "appId": "app.lumen.desktop",
     "productName": "Lumen Desktop",
-    "directories": { "output": "release" },
-    "files": ["dist-main/**/*", "dist-renderer/**/*", "package.json"],
-    "extraResources": [{ "from": "native/build/Release/lumen-audio.exe", "to": "native/lumen-audio.exe" }],
-    "win": { "target": "nsis", "artifactName": "Lumen-Desktop-${version}-Setup.exe" },
-    "nsis": { "oneClick": true, "perMachine": false, "allowElevation": false }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-main/**/*",
+      "dist-renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native/build/Release/lumen-audio.exe",
+        "to": "native/lumen-audio.exe"
+      },
+      {
+        "from": "assets/lumen-icon.png",
+        "to": "assets/lumen-icon.png"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/lumen-icon.ico",
+      "artifactName": "Lumen-Desktop-${version}-Setup.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "installerIcon": "assets/lumen-icon.ico",
+      "uninstallerIcon": "assets/lumen-icon.ico"
+    }
   }
 }
