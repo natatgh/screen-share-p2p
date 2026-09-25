@@ -3,8 +3,11 @@ name: Lumen Desktop
 on:
   push:
     branches: [master]
-    tags: ["v*.*.*"]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   windows:
@@ -27,6 +30,11 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node apps/desktop/scripts/check-version-bump.mjs $env:BASE_SHA
+      - name: Check Desktop version on master
+        if: github.event_name == 'push'
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: node apps/desktop/scripts/check-version-bump.mjs $env:BASE_SHA
       - name: Install web dependencies
         run: npm ci
       - name: Verify web
@@ -41,17 +49,30 @@ jobs:
         run: |
           cmake -S apps/desktop/native -B apps/desktop/native/build -A x64
           cmake --build apps/desktop/native/build --config Release
-      - name: Check release version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Check whether a Desktop release is needed
+        if: github.event_name == 'push'
+        id: desktop_release
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: node apps/desktop/scripts/check-version.mjs $env:RELEASE_TAG
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content 'apps/desktop/package.json' | ConvertFrom-Json).version
+          node apps/desktop/scripts/check-version.mjs "v$version"
+          if ($LASTEXITCODE -ne 0) { throw 'Versão do Desktop inválida.' }
+          $draft = gh release view "v$version" --json isDraft --jq .isDraft 2>$null
+          if ($LASTEXITCODE -eq 0 -and $draft -eq 'false') {
+            "needed=false" >> $env:GITHUB_OUTPUT
+          } else {
+            "needed=true" >> $env:GITHUB_OUTPUT
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
       - name: Package Windows installer
+        if: steps.desktop_release.outputs.needed == 'true'
         working-directory: apps/desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder --win nsis --publish never
       - name: Package standalone ZIP
+        if: steps.desktop_release.outputs.needed == 'true'
         working-directory: apps/desktop
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
@@ -63,20 +84,29 @@ jobs:
           $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText((Join-Path (Resolve-Path -LiteralPath 'release').Path "Lumen-Desktop-$version-Standalone.sha256"), "$hash  Lumen-Desktop-$version-Standalone.zip")
       - name: Sign update manifest
-        if: startsWith(github.ref, 'refs/tags/')
+        if: steps.desktop_release.outputs.needed == 'true'
         working-directory: apps/desktop
         env:
           LUMEN_UPDATE_PRIVATE_KEY_B64: ${{ secrets.LUMEN_UPDATE_PRIVATE_KEY_B64 }}
         run: node scripts/sign-release.mjs
-      - name: Draft GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish Desktop release
+        if: steps.desktop_release.outputs.needed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.desktop_release.outputs.version }}
         run: |
           $installer = (Get-ChildItem -LiteralPath 'apps/desktop/release' -Filter 'Lumen-Desktop-*-Setup.exe' | Select-Object -First 1).FullName
-          $version = $env:RELEASE_TAG.TrimStart('v')
-          $standalone = "apps/desktop/release/Lumen-Desktop-$version-Standalone.zip"
-          $checksum = "apps/desktop/release/Lumen-Desktop-$version-Standalone.sha256"
-          gh release create $env:RELEASE_TAG $installer $standalone $checksum --draft --generate-notes --title "Lumen Desktop $env:RELEASE_TAG"
-          gh release upload $env:RELEASE_TAG apps/desktop/release/lumen-update.json apps/desktop/release/lumen-update.sig
+          $tag = "v$env:RELEASE_VERSION"
+          $standalone = "apps/desktop/release/Lumen-Desktop-$env:RELEASE_VERSION-Standalone.zip"
+          $checksum = "apps/desktop/release/Lumen-Desktop-$env:RELEASE_VERSION-Standalone.sha256"
+          $assets = @($installer, $standalone, $checksum, 'apps/desktop/release/lumen-update.json', 'apps/desktop/release/lumen-update.sig')
+          $draft = gh release view $tag --json isDraft --jq .isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if ($draft -ne 'true') { throw 'A release já foi publicada por outro processo.' }
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --draft --target $env:GITHUB_SHA --generate-notes --title "Lumen Desktop $tag"
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao anexar arquivos à release do Desktop.' }
+          gh release edit $tag --draft=false
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao publicar release do Desktop.' }

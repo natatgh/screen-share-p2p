@@ -28,6 +28,8 @@ Na captura, o app sugere a seleção de uma janela, mas compartilha áudio **som
 3. Configure `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` como variáveis de ambiente na Vercel. Não use chave secret/service role.
 4. Faça deploy. O build é o padrão Next.js; o servidor local da porta 3001 não é usado no deploy.
 
+O projeto Vercel `screen-share-p2p` está conectado ao repositório `natatgh/screen-share-p2p`, com `master` como branch de produção. Cada merge nessa branch inicia o deploy web pela integração Git da Vercel. O fluxo do Desktop é independente: quando a versão em `apps/desktop/package.json` avança, a Action Windows publica uma nova release após as verificações.
+
 Os canais Realtime são públicos e o código é a única barreira de entrada. O MVP é adequado para compartilhamento casual com pessoas de confiança, não para conteúdo confidencial. O Supabase gratuito pode pausar projetos inativos e tem cotas; veja [Arquitetura](docs/architecture.md).
 
 ## Scripts
