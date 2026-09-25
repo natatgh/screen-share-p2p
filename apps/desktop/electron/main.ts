@@ -66,9 +66,9 @@ async function createWindow(): Promise<void> {
     : path.join(__dirname, "..", "assets", "lumen-icon.png");
   mainWindow = new BrowserWindow({
     width: 1140, height: 760, minWidth: 860, minHeight: 600,
-    backgroundColor: "#141a1e", title: "Lumen Desktop", icon,
+    backgroundColor: "#0F1013", title: "Lumen Desktop", icon,
     titleBarStyle: "hidden",
-    titleBarOverlay: { color: "#141a1e", symbolColor: "#edf8f1", height: 48 },
+    titleBarOverlay: { color: "#0F1013", symbolColor: "#F4F1EA", height: 48 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, sandbox: true, nodeIntegration: false,

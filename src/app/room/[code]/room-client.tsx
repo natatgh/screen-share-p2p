@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, LogOut, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
 import { useRoom } from "@/lib/use-room";
 import { ConnectionDiagnostics } from "@/components/connection-diagnostics";
 import type { StreamFrameRate, StreamMode, StreamResolution, StreamSettings } from "@/lib/stream-quality";
 
 type Screen = { id: string; label: string; stream: MediaStream; local: boolean };
+type SidebarTab = "people" | "connection";
+
+function formatCode(code: string): string {
+  return code.length === 8 ? `${code.slice(0, 4)} ${code.slice(4)}` : code;
+}
 
 function VideoPlayer({ screen }: { screen: Screen }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -95,6 +100,7 @@ export default function RoomClient({ code }: { code: string }) {
   const [copyError, setCopyError] = useState(false);
   const [startingShare, setStartingShare] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("people");
   const streams: Screen[] = [
     ...remotes.map((remote) => ({ id: remote.id, label: `Tela do participante ${Math.max(1, peers.indexOf(remote.id) + 1)}`, stream: remote.stream, local: false })),
     ...(localStream ? [{ id: "self", label: "Sua tela", stream: localStream, local: true }] : []),
@@ -119,26 +125,58 @@ export default function RoomClient({ code }: { code: string }) {
 
   return <main className="room-shell">
     <header className="room-header">
-      <div className="room-header-left"><Link className="back-link" href="/" aria-label="Voltar ao início"><ArrowLeft size={18} /></Link><Link className="brand" href="/"><span className="brand-mark"><MonitorPlay size={19} strokeWidth={2.5} /></span><span>Lumen<span className="brand-dot">.</span></span></Link><span className="header-divider" /><span className="header-room">Sala <strong>{code}</strong></span></div>
-      <div className={`room-status ${connected ? "connected" : ""}`}><span className="status-dot" /> {status}</div>
+      <div className="room-header-left">
+        <Link className="back-link" href="/" aria-label="Voltar ao início"><ArrowLeft size={18} /></Link>
+        <Link className="brand" href="/"><span className="brand-mark"><MonitorPlay size={19} strokeWidth={2.5} /></span><span>Lumen<span className="brand-dot">.</span></span></Link>
+        <span className="header-divider" />
+        <span className="header-room">Sala <strong>{formatCode(code)}</strong></span>
+        <button className="copy-chip" onClick={copy}>{copied ? <Check size={15} /> : <Link2 size={15} />}{copied ? "Link copiado" : "Copiar link"}</button>
+      </div>
+      <div className="room-header-left">
+        <div className={`room-status ${connected ? "connected" : ""}`}><span className="status-dot" /> {status}</div>
+        <Link className="leave-link" href="/"><LogOut size={16} /> Sair</Link>
+      </div>
     </header>
 
     <div className="room-main">
       <aside className="room-sidebar">
-        <div className="sidebar-section"><span className="eyebrow">SUA SALA</span><h1>{code}</h1><p>Envie o link para convidar alguém a assistir ou compartilhar.</p><button className="copy-button" onClick={copy}>{copied ? <Check size={17} /> : <Link2 size={17} />}{copied ? "Link copiado" : "Copiar link da sala"}</button>{copyError && <small className="copy-error" role="alert">Não foi possível copiar o link.</small>}</div>
-        <div className="sidebar-section participants-section"><div className="section-title"><span><UsersRound size={15} /> PARTICIPANTES</span><b>{peers.length + 1}</b></div><div className="participant"><span className="avatar self">V</span><div><strong>Você</strong><small>{sharing ? "Compartilhando tela" : "Na sala"}</small></div>{sharing && <span className="participant-live">AO VIVO</span>}</div>{peers.map((id, index) => <div className="participant" key={id}><span className="avatar">{index + 1}</span><div><strong>Participante {index + 1}</strong><small>{remotes.some((remote) => remote.id === id) ? "Compartilhando tela" : "Na sala"}</small></div>{remotes.some((remote) => remote.id === id) && <span className="participant-live">AO VIVO</span>}</div>)}</div>
-        <div className="sidebar-bottom"><Info size={17} /><span>Sem gravação. A mídia passa diretamente entre os participantes quando a rede permite.</span></div>
+        <div className="sidebar-tabs" role="tablist" aria-label="Painel da sala">
+          <button type="button" role="tab" aria-selected={sidebarTab === "people"} className={`sidebar-tab ${sidebarTab === "people" ? "active" : ""}`} onClick={() => setSidebarTab("people")}>Pessoas · <span className="tab-count">{peers.length + 1}</span></button>
+          <button type="button" role="tab" aria-selected={sidebarTab === "connection"} className={`sidebar-tab ${sidebarTab === "connection" ? "active" : ""}`} onClick={() => setSidebarTab("connection")}>Conexão</button>
+        </div>
+
+        {sidebarTab === "people" ? <>
+          <div className="sidebar-section" style={{ paddingBottom: 0 }}>
+            <span className="eyebrow">SUA SALA</span>
+            <h1>{formatCode(code)}</h1>
+            <p>Envie o link para convidar alguém a assistir ou compartilhar.</p>
+            <button className="copy-button" onClick={copy}>{copied ? <Check size={17} /> : <Link2 size={17} />}{copied ? "Link copiado" : "Copiar link da sala"}</button>
+            {copyError && <small className="copy-error" role="alert">Não foi possível copiar o link.</small>}
+          </div>
+          <div className="sidebar-panel">
+            <div className="participant"><span className="avatar self">V</span><div><strong>Você</strong><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></div>{sharing && <span className="participant-live">AO VIVO</span>}</div>
+            {peers.map((id, index) => <div className="participant" key={id}><span className="avatar">{index + 1}</span><div><strong>Participante {index + 1}</strong><small>{remotes.some((remote) => remote.id === id) ? "Transmitindo agora" : "Na sala"}</small></div>{remotes.some((remote) => remote.id === id) && <span className="participant-live">AO VIVO</span>}</div>)}
+          </div>
+          <div className="sidebar-bottom"><Info size={17} /><span>Sem gravação. A mídia passa diretamente entre os participantes quando a rede permite.</span></div>
+        </> : <div className="sidebar-panel">
+          <ConnectionDiagnostics status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} />
+        </div>}
       </aside>
 
       <section className="stage">
         <div className="stage-heading"><div><div className="eyebrow"><Radio size={14} /> ÁREA DE TRANSMISSÃO</div><h2>{featured ? "Acompanhe a transmissão" : "Pronto para começar"}</h2><p>{featured ? "Selecione uma tela para destacar ou abra em tela cheia." : "Compartilhe sua tela ou convide alguém para apresentar."}</p></div><div className="viewer-count"><UsersRound size={16} /> {peers.length + 1} {peers.length ? "na sala" : "pessoa na sala"}</div></div>
         {error && <div className="stage-error" role="alert"><Info size={18} /> {error}</div>}
-        <ConnectionDiagnostics status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} />
 
         {featured ? <div className="player-layout"><VideoPlayer key={featured.id} screen={featured} />{streams.length > 1 && <div className="stream-rail" aria-label="Outras transmissões"><div className="rail-heading">Telas na sala <span>{streams.length}</span></div><div className="stream-thumbs">{streams.map((screen) => <StreamThumb key={screen.id} screen={screen} selected={screen.id === featured.id} onSelect={() => setSelectedId(screen.id)} />)}</div></div>}</div> : <div className="empty-stage"><div className="empty-visual"><MonitorPlay size={42} strokeWidth={1.4} /><span><Expand size={16} /></span></div><h3>Nenhuma tela compartilhada</h3><p>Inicie uma transmissão ou copie o link para convidar alguém.</p><button className="empty-invite" onClick={copy}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? "Link copiado" : "Copiar convite"}</button></div>}
 
-        {settingsOpen && <QualityPanel settings={settings} warning={settingsWarning} onChange={setSettings} />}
-        <div className="stage-actions"><div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? localStream?.getAudioTracks().length ? "Áudio da aba selecionada ativo." : "Sem áudio compartilhado. Para transmitir som, escolha uma aba." : "Áudio somente de abas; janelas e monitores compartilham apenas vídeo."}</span></div></div><div className="stage-controls"><button type="button" className="quality-trigger" aria-expanded={settingsOpen} aria-controls="stream-settings" onClick={() => setSettingsOpen((open) => !open)}><SlidersHorizontal size={16} /><span><small>QUALIDADE</small><strong>{settings.resolution === "source" ? "Original" : `${settings.resolution}p`} · {settings.frameRate} FPS</strong></span><ChevronDown size={15} className={settingsOpen ? "rotated" : ""} /></button><button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : beginSharing} disabled={startingShare}>{sharing ? <Square size={16} fill="currentColor" /> : <ScreenShare size={18} />}{sharing ? "Parar transmissão" : startingShare ? "Abrindo captura…" : "Compartilhar tela"}</button></div></div>
+        <div className="stage-actions">
+          <div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? localStream?.getAudioTracks().length ? "Áudio da aba selecionada ativo." : "Sem áudio compartilhado. Para transmitir som, escolha uma aba." : "Áudio somente de abas; janelas e monitores compartilham apenas vídeo."}</span></div></div>
+          <div className="stage-controls">
+            <button type="button" className="quality-trigger" aria-expanded={settingsOpen} aria-controls="stream-settings" onClick={() => setSettingsOpen((open) => !open)}><SlidersHorizontal size={16} /><span><small>QUALIDADE</small><strong>{settings.resolution === "source" ? "Original" : `${settings.resolution}p`} · {settings.frameRate} FPS</strong></span><ChevronDown size={15} className={settingsOpen ? "rotated" : ""} /></button>
+            <button className={sharing ? "stop-button" : "primary-button"} onClick={sharing ? stopSharing : beginSharing} disabled={startingShare}>{sharing ? <Square size={16} fill="currentColor" /> : <ScreenShare size={18} />}{sharing ? "Parar transmissão" : startingShare ? "Abrindo captura…" : "Compartilhar tela"}</button>
+          </div>
+          {settingsOpen && <QualityPanel settings={settings} warning={settingsWarning} onChange={setSettings} />}
+        </div>
       </section>
     </div>
   </main>;
