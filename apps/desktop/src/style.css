@@ -37,3 +37,14 @@
 .update-popover-actions{display:flex;gap:8px}
 .update-popover-actions button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;height:34px;border-radius:8px;border:1px solid #2C2E36;background:#1F2027;color:#F4F1EA;font-size:12px}
 .update-popover-actions button:hover{background:#2A2C34}
+
+/* Collapsible connection diagnostics (compact by default, like the old inline panel) */
+.diagnostics-panel{border:1px solid #2C2E36;border-radius:12px;background:#17181D;overflow:hidden}
+.diagnostics-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:none;padding:12px 14px;color:#F4F1EA;font-size:13px;font-weight:600}
+.diagnostics-toggle:hover{background:#1F2027}
+.diagnostics-toggle span{display:flex;align-items:center;gap:8px}
+.diagnostics-toggle svg.rotated{transform:rotate(180deg)}
+.diagnostics-body{padding:0 14px 14px}
+
+.broadcast-hint{display:flex;align-items:center;gap:10px;color:#A9A69E;font-size:12px}
+.broadcast-hint svg{color:#FFC24B;flex-shrink:0}
