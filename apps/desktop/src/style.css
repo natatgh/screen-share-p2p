@@ -5,7 +5,7 @@
 .brand-icon{display:block;object-fit:contain;background:transparent}
 
 /* The title bar shares its row with the native Windows window controls. */
-.topbar{height:48px;padding:0;user-select:none;app-region:drag;-webkit-app-region:drag}
+.topbar{height:48px;padding:0;user-select:none;app-region:drag;-webkit-app-region:drag;position:sticky;top:0;z-index:30;flex-shrink:0}
 .topbar-safe{height:100%;margin-left:env(titlebar-area-x,0px);width:env(titlebar-area-width,calc(100% - 138px));display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 16px}
 .topbar .brand{flex:none;gap:7px;font-size:17px;letter-spacing:-.6px}
 .topbar .brand-icon{width:27px;height:27px;border-radius:7px}
