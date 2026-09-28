@@ -3,8 +3,10 @@ import { createRoot } from "react-dom/client";
 import { Activity, Check, ChevronDown, Copy, ExternalLink, Maximize2, MonitorPlay, Radio, RefreshCw, ScreenShare, Settings2, Square, Users, Volume2, VolumeX, X } from "lucide-react";
 import { createRoom, isValidRoom, normalizeRoom } from "../../../src/lib/room";
 import { useRoom, type RoomCapture } from "../../../src/lib/use-room";
-import { ConnectionDiagnostics } from "../../../src/components/connection-diagnostics";
+import { ConnectionDiagnostics, EffectiveQuality } from "../../../src/components/connection-diagnostics";
 import type { PeerMetrics } from "../../../src/lib/rtc-stats";
+import type { VideoCodec } from "../../../src/lib/codec-preference";
+import { observePlayback, type RuntimeMetrics } from "../../../src/lib/diagnostic-report";
 import { captureConstraintsForSettings, type StreamFrameRate, type StreamMode, type StreamResolution, type StreamSettings } from "../../../src/lib/stream-quality";
 import type { CaptureSource } from "./types";
 import workletUrl from "./pcm-worklet.js?url";
@@ -66,7 +68,7 @@ function useUpdateInfo() {
   return { version, updateStatus };
 }
 
-function DiagnosticsPanel(props: { status: string; peers: string[]; metrics: PeerMetrics[]; adaptiveQuality: boolean; onAdaptiveQualityChange: (enabled: boolean) => void }) {
+function DiagnosticsPanel(props: { codec?: VideoCodec; onCodecChange?: (codec: VideoCodec) => void; runtime?: RuntimeMetrics; status: string; peers: string[]; metrics: PeerMetrics[]; adaptiveQuality: boolean; onAdaptiveQualityChange: (enabled: boolean) => void; onExport: () => void }) {
   const [open, setOpen] = useState(false);
   return <div className="diagnostics-panel">
     <button type="button" className="diagnostics-toggle" aria-expanded={open} aria-controls="diagnostics-body" onClick={() => setOpen((current) => !current)}>
@@ -121,7 +123,8 @@ function VideoTile({ stream, label, own = false }: { stream: MediaStream; label:
     if (!video) return;
     video.srcObject = stream;
     void video.play().then(() => setPlayBlocked(false)).catch(() => setPlayBlocked(true));
-    return () => { video.srcObject = null; };
+    const stop = observePlayback(video, stream);
+    return () => { stop(); video.srcObject = null; };
   }, [stream]);
   return <div className="video-tile"><video ref={ref} autoPlay playsInline muted={own} aria-label={`Transmissão de ${label}`} />
     <div className="tile-controls"><span><Radio size={13} /> {label}{own ? " · Você" : ""}</span><button title="Tela cheia" aria-label={`Tela cheia: ${label}`} onClick={() => void ref.current?.requestFullscreen()}><Maximize2 size={16} /></button></div>
@@ -135,6 +138,8 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
   const [audioWarning, setAudioWarning] = useState("");
   const [copied, setCopied] = useState(false);
   const { version, updateStatus } = useUpdateInfo();
+  const audioStats = useRef({ audioBufferedMs: 0, audioDroppedFrames: 0, audioUnderruns: 0 });
+  const audioNode = useRef<AudioWorkletNode | null>(null);
   const captureRef = useRef<{ context: AudioContext; unsubscribe: () => void } | null>(null);
   const sourceRef = useRef(selected);
   const audioRef = useRef(includeAudio);
@@ -157,11 +162,12 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
           context = new AudioContext();
           await context.audioWorklet.addModule(workletUrl);
           const node = new AudioWorkletNode(context, "lumen-pcm", { outputChannelCount: [2] });
+          audioNode.current = node;
+          node.port.onmessage = ({ data }) => { audioStats.current = data; };
           const destination = context.createMediaStreamDestination();
           node.connect(destination);
           unsubscribe = window.lumenDesktop.onAudioChunk((chunk) => {
-            const copy = new Uint8Array(chunk);
-            node.port.postMessage(copy.buffer, [copy.buffer]);
+            node.port.postMessage(chunk.buffer, [chunk.buffer]);
           });
           await context.resume();
           const result = await window.lumenDesktop.startAppAudio();
@@ -169,6 +175,7 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
           stream.addTrack(destination.stream.getAudioTracks()[0]);
           captureRef.current = { context, unsubscribe };
         } catch (cause) {
+          audioNode.current = null;
           unsubscribe?.();
           if (context) void context.close();
           void window.lumenDesktop.stopAppAudio();
@@ -181,12 +188,14 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
       captureRef.current?.unsubscribe();
       void captureRef.current?.context.close();
       captureRef.current = null;
+      audioNode.current = null;
       void window.lumenDesktop.stopAppAudio();
     },
   }), []);
 
-  const { peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality } = useRoom(code, {
+  const { runtime, exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality } = useRoom(code, {
     capture,
+    runtimeMetrics: async () => { audioNode.current?.port.postMessage({ type: "stats" }); return { ...await window.lumenDesktop.getRuntimeMetrics(), ...(audioNode.current ? audioStats.current : {}) }; },
     signaling: { url: __SUPABASE_URL__, key: __SUPABASE_KEY__, localHost: "localhost", production: import.meta.env.PROD },
   });
   const [starting, setStarting] = useState(false);
@@ -202,14 +211,14 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
       <div className="sidebar-section"><div className="section-heading">CONVITE</div><div className="invite-box"><span>{code}</span><button onClick={() => void copy()} title="Copiar link da sala">{copied ? <Check size={17} /> : <Copy size={17} />}</button></div><small>{copied ? "Link copiado" : "Convide pessoas pelo link"}</small></div>
       <div className="sidebar-section"><div className="section-heading people-heading"><span><Users size={14} /> PARTICIPANTES</span><b>{peers.length + 1}</b></div><div className="person"><span className="avatar self">V</span><span><b>Você</b><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></span>{sharing && <Radio size={14} />}</div>{peers.map((peer, index) => <div className="person" key={peer}><span className="avatar">{index + 1}</span><span><b>Participante {index + 1}</b><small>{remotes.some((remote) => remote.id === peer) ? "Transmitindo agora" : "Na sala"}</small></span>{remotes.some((remote) => remote.id === peer) && <Radio size={14} />}</div>)}</div>
       <div className="sidebar-bottom"><button onClick={() => { stopSharing(); leave(); }}>Sair da sala</button></div></aside>
-      <section className="workspace room-workspace"><div className="workspace-title"><div><span className="eyebrow">SALA DE TRANSMISSÃO</span><h2>{remotes.length + (sharing ? 1 : 0) ? "Transmissões ao vivo" : peers.length ? "Pessoas na sala" : "Tudo pronto para assistir"}</h2></div><span className="viewer-count"><Users size={16} /> {peers.length + 1} na sala</span></div><DiagnosticsPanel status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} />
+      <section className="workspace room-workspace"><div className="workspace-title"><div><span className="eyebrow">SALA DE TRANSMISSÃO</span><h2>{remotes.length + (sharing ? 1 : 0) ? "Transmissões ao vivo" : peers.length ? "Pessoas na sala" : "Tudo pronto para assistir"}</h2></div><span className="viewer-count"><Users size={16} /> {peers.length + 1} na sala</span></div><EffectiveQuality metrics={metrics} /><DiagnosticsPanel status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} onExport={exportDiagnostics} runtime={runtime} codec={settings.codec} onCodecChange={sharing ? (codec) => void setSettings({ ...settings, codec }) : undefined} />
         {remotes.length || (sharing && localStream) ? <div className="stream-grid">{remotes.map((remote) => <VideoTile key={remote.id} stream={remote.stream} label={`Participante ${Math.max(1, peers.indexOf(remote.id) + 1)}`} />)}{sharing && localStream && <VideoTile stream={localStream} label="Sua tela" own />}</div> : peers.length ? <div className="members-area"><div className="member-grid"><div className="member-tile"><span className="member-avatar self">V</span><strong>Você</strong><small>Assistindo</small></div>{peers.map((peer, index) => <div className="member-tile" key={peer}><span className="member-avatar">{index + 1}</span><strong>Participante {index + 1}</strong><small>Na sala</small></div>)}</div><div className="members-cta"><span>Nenhuma transmissão ao vivo ainda. Use &ldquo;Compartilhar tela&rdquo; abaixo para começar.</span></div></div> : <div className="room-empty"><div className="empty-icon"><MonitorPlay size={42} strokeWidth={1.5} /></div><h3>Nenhuma tela compartilhada ainda</h3><p>Use &ldquo;Compartilhar tela&rdquo; abaixo para começar, ou convide mais gente.</p><button className="secondary" onClick={() => void copy()}><Copy size={16} /> {copied ? "Copiado" : "Copiar convite"}</button></div>}
         {(error || audioWarning || settingsWarning) && <div className="warning" role="status">{error || audioWarning || settingsWarning}</div>}
         <footer className="actionbar room-actions"><div className="broadcast-hint">{sharing ? <Radio size={16} /> : <ScreenShare size={16} />}<span>{sharing ? "Sua tela está ao vivo." : "Compartilhe sua tela quando quiser."}</span></div><div className="room-buttons">{sharing && <button className="stop" onClick={stopSharing}><Square size={15} fill="currentColor" /> Parar transmissão</button>}<button className="go-live" onClick={() => { setShareModal(true); void refresh(); }}><ScreenShare size={17} />{sharing ? "Alterar transmissão" : "Compartilhar tela"}</button></div></footer>
       </section></main>
     {shareModal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShareModal(false); }}><div className="share-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><div><span className="eyebrow">TRANSMISSÃO</span><h2 id="modal-title">Compartilhar tela</h2><p>Escolha uma janela ou monitor. Você pode continuar apenas assistindo.</p></div><button className="icon-button" title="Fechar" aria-label="Fechar" onClick={() => setShareModal(false)}><X size={20} /></button></div>
       <div className="modal-body"><div className="source-heading"><strong>Janelas e monitores</strong><button onClick={() => void refresh()} disabled={loading}><RefreshCw size={15} /> Atualizar</button></div>{sourceError && <p className="warning" role="alert">{sourceError}</p>}<div className="sources">{sources.map((source) => <button key={source.id} className={`source ${selected?.id === source.id ? "selected" : ""}`} onClick={() => void pick(source)}><img src={source.thumbnail} alt="" /><span>{source.icon && <img src={source.icon} alt="" />}<b>{source.name}</b></span><small>{source.type === "window" ? "JANELA" : "MONITOR"}</small></button>)}</div>
-        <div className="bottom-grid"><div className="preview"><div className="panel-heading"><MonitorPlay size={17} /> Prévia</div><Preview stream={localStream} source={selected} /></div><div className="settings"><div className="panel-heading"><Settings2 size={17} /> Configurações</div><label className="field">PREFERÊNCIA<select value={settings.mode} onChange={(e) => void setSettings({ ...settings, mode: e.target.value as StreamMode })}><option value="balanced">Equilibrado</option><option value="smooth">Vídeo mais fluido</option><option value="detail">Texto mais nítido</option></select></label><div className="field">RESOLUÇÃO<div className="segments">{([720, 1080, "source"] as StreamResolution[]).map((resolution) => <button key={resolution} className={settings.resolution === resolution ? "selected" : ""} onClick={() => void setSettings({ ...settings, resolution })}>{resolution === "source" ? "Original" : `${resolution}p`}</button>)}</div></div><div className="field">QUADROS POR SEGUNDO<div className="segments">{([15, 30, 60] as StreamFrameRate[]).map((frameRate) => <button key={frameRate} className={settings.frameRate === frameRate ? "selected" : ""} onClick={() => void setSettings({ ...settings, frameRate })}>{frameRate}</button>)}</div></div><label className="audio-toggle"><span>{includeAudio ? <Volume2 size={18} /> : <VolumeX size={18} />}<span><b>Áudio do aplicativo</b><small>{selected?.type === "window" ? "Pode incluir outras janelas do mesmo aplicativo." : "Monitores transmitem somente vídeo."}</small></span></span><input type="checkbox" checked={includeAudio} disabled={sharing || selected?.type !== "window"} onChange={(e) => setIncludeAudio(e.target.checked)} /></label></div></div></div>
+        <div className="bottom-grid"><div className="preview"><div className="panel-heading"><MonitorPlay size={17} /> Prévia</div><Preview stream={localStream} source={selected} /></div><div className="settings"><div className="panel-heading"><Settings2 size={17} /> Configurações</div><label className="field">PREFERÊNCIA<select value={settings.mode} onChange={(e) => void setSettings({ ...settings, mode: e.target.value as StreamMode })}><option value="balanced">Equilibrado</option><option value="smooth">Vídeo mais fluido</option><option value="detail">Texto mais nítido</option></select></label><div className="field">RESOLUÇÃO<div className="segments">{([720, 1080, "source"] as StreamResolution[]).map((resolution) => <button key={resolution} className={settings.resolution === resolution ? "selected" : ""} onClick={() => void setSettings({ ...settings, resolution })}>{resolution === "source" ? "Original" : `${resolution}p`}</button>)}</div></div><div className="field">QUADROS POR SEGUNDO<div className="segments">{([15, 30, 60] as StreamFrameRate[]).map((frameRate) => <button key={frameRate} className={settings.frameRate === frameRate ? "selected" : ""} onClick={() => void setSettings({ ...settings, frameRate })}>{frameRate}</button>)}</div></div><label className="field">UPLOAD TOTAL (Mb/s, opcional)<input type="number" min="1" max="1000" placeholder="Automático" value={settings.uploadBudgetMbps ?? ""} onChange={(e) => void setSettings({ ...settings, uploadBudgetMbps: Number(e.target.value) > 0 ? Number(e.target.value) : undefined })} /></label><label className="audio-toggle"><span>{includeAudio ? <Volume2 size={18} /> : <VolumeX size={18} />}<span><b>Áudio do aplicativo</b><small>{selected?.type === "window" ? "Pode incluir outras janelas do mesmo aplicativo." : "Monitores transmitem somente vídeo."}</small></span></span><input type="checkbox" checked={includeAudio} disabled={sharing || selected?.type !== "window"} onChange={(e) => setIncludeAudio(e.target.checked)} /></label></div></div></div>
       <div className="modal-footer"><button className="secondary" onClick={() => setShareModal(false)}>Cancelar</button><button className="go-live" onClick={() => void start()} disabled={!selected || starting || sharing}><ScreenShare size={17} />{starting ? "Iniciando…" : sharing ? "Pare a transmissão para trocar" : "Entrar ao vivo"}</button></div></div></div>}
   </div>;
 }

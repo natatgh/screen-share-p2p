@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, LogOut, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
+import { observePlayback } from "@/lib/diagnostic-report";
 import { useRoom } from "@/lib/use-room";
-import { ConnectionDiagnostics } from "@/components/connection-diagnostics";
+import { ConnectionDiagnostics, EffectiveQuality } from "@/components/connection-diagnostics";
 import type { StreamFrameRate, StreamMode, StreamResolution, StreamSettings } from "@/lib/stream-quality";
 
 type Screen = { id: string; label: string; stream: MediaStream; local: boolean };
@@ -29,7 +30,8 @@ function VideoPlayer({ screen }: { screen: Screen }) {
     element.srcObject = screen.stream;
     element.muted = screen.local;
     void element.play().then(() => setBlocked(false)).catch(() => setBlocked(true));
-    return () => { element.srcObject = null; };
+    const stop = observePlayback(element, screen.stream);
+    return () => { stop(); element.srcObject = null; };
   }, [screen.stream, screen.local]);
 
   useEffect(() => {
@@ -88,13 +90,14 @@ function QualityPanel({ settings, warning, onChange }: { settings: StreamSetting
       <div className="quality-option"><div className="quality-option-title">RESOLUÇÃO</div><div className="segment-control" role="group" aria-label="Resolução da transmissão">{resolutions.map((option) => <button key={option.value} type="button" aria-pressed={settings.resolution === option.value} className={settings.resolution === option.value ? "selected" : ""} onClick={() => void onChange({ ...settings, resolution: option.value })}>{option.label}</button>)}</div></div>
       <div className="quality-option"><div className="quality-option-title">QUADROS POR SEGUNDO</div><div className="segment-control" role="group" aria-label="Quadros por segundo">{frameRates.map((frameRate) => <button key={frameRate} type="button" aria-pressed={settings.frameRate === frameRate} className={settings.frameRate === frameRate ? "selected" : ""} onClick={() => void onChange({ ...settings, frameRate })}>{frameRate}</button>)}</div></div>
     </div>
+    <label className="mode-control">UPLOAD TOTAL (Mb/s, opcional)<input type="number" min="1" max="1000" placeholder="Automático" value={settings.uploadBudgetMbps ?? ""} onChange={(e) => void onChange({ ...settings, uploadBudgetMbps: Number(e.target.value) > 0 ? Number(e.target.value) : undefined })} /></label>
     <p className="quality-note">O navegador e a conexão podem limitar a resolução e os FPS efetivos. 60 FPS exige mais CPU e upload por espectador.</p>
     {warning && <p className="quality-warning" role="status">{warning}</p>}
   </section>;
 }
 
 export default function RoomClient({ code }: { code: string }) {
-  const { peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality } = useRoom(code);
+  const { exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality } = useRoom(code);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -159,7 +162,7 @@ export default function RoomClient({ code }: { code: string }) {
           </div>
           <div className="sidebar-bottom"><Info size={17} /><span>Sem gravação. A mídia passa diretamente entre os participantes quando a rede permite.</span></div>
         </> : <div className="sidebar-panel">
-          <ConnectionDiagnostics status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} />
+          <ConnectionDiagnostics status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} onExport={exportDiagnostics} codec={settings.codec} onCodecChange={sharing ? (codec) => void setSettings({ ...settings, codec }) : undefined} />
         </div>}
       </aside>
 
@@ -169,6 +172,7 @@ export default function RoomClient({ code }: { code: string }) {
 
         {featured ? <div className="player-layout"><VideoPlayer key={featured.id} screen={featured} />{streams.length > 1 && <div className="stream-rail" aria-label="Outras transmissões"><div className="rail-heading">Telas na sala <span>{streams.length}</span></div><div className="stream-thumbs">{streams.map((screen) => <StreamThumb key={screen.id} screen={screen} selected={screen.id === featured.id} onSelect={() => setSelectedId(screen.id)} />)}</div></div>}</div> : <div className="empty-stage"><div className="empty-visual"><MonitorPlay size={42} strokeWidth={1.4} /><span><Expand size={16} /></span></div><h3>Nenhuma tela compartilhada</h3><p>Inicie uma transmissão ou copie o link para convidar alguém.</p><button className="empty-invite" onClick={copy}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? "Link copiado" : "Copiar convite"}</button></div>}
 
+        <EffectiveQuality metrics={metrics} />
         <div className="stage-actions">
           <div className="broadcast-message"><span className={`broadcast-icon ${sharing ? "active" : ""}`}>{sharing ? <Radio size={21} /> : <ScreenShare size={21} />}</span><div><strong>{sharing ? "Sua tela está ao vivo" : "Compartilhe sua tela"}</strong><span>{sharing ? localStream?.getAudioTracks().length ? "Áudio da aba selecionada ativo." : "Sem áudio compartilhado. Para transmitir som, escolha uma aba." : "Áudio somente de abas; janelas e monitores compartilham apenas vídeo."}</span></div></div>
           <div className="stage-controls">

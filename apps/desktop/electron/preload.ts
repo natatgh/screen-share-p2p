@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("lumenDesktop", {
     return () => ipcRenderer.removeListener("update:status", listener);
   },
   checkUpdate: () => ipcRenderer.invoke("update:check"),
+  getRuntimeMetrics: () => ipcRenderer.invoke("app:metrics"),
   getVersion: () => ipcRenderer.invoke("app:version"),
   openReleases: () => ipcRenderer.invoke("app:releases"),
 });

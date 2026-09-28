@@ -1,56 +1,33 @@
-import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import { connectRoom, type Signaling } from "../src/lib/signaling";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 if (!url || !key) throw new Error("Configure .env.local antes de testar o Realtime.");
-
-const topic = `screen:SMOKE${Date.now()}`;
-const alice = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+const room = `SMOKE${Date.now()}`;
 const bob = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-const channelA = alice.channel(topic, { config: { presence: { key: "alice" } } });
-const channelB = bob.channel(topic, { config: { presence: { key: "bob" } } });
-
-function subscribe(channel: RealtimeChannel): Promise<void> {
-  return new Promise((resolve, reject) => channel.subscribe((status, error) => {
-    if (status === "SUBSCRIBED") resolve();
-    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") reject(error || new Error(status));
-  }));
-}
-
-async function main() {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error("Tempo esgotado no teste do Realtime.")), 15_000);
-  });
-  try {
-    await Promise.race([run(), timeout]);
-  } finally {
-    clearTimeout(timer);
-    await Promise.all([alice.removeChannel(channelA), bob.removeChannel(channelB)]);
-    alice.realtime.disconnect();
-    bob.realtime.disconnect();
-  }
-}
+const channel = bob.channel(`screen:${room}`, { config: { presence: { key: "bob" } } });
+let alice: Signaling | undefined;
+let timer: ReturnType<typeof setTimeout> | undefined;
 
 async function run() {
-  const bothPresent = new Promise<void>((resolve) => {
-    channelA.on("presence", { event: "sync" }, () => {
-      const ids = Object.keys(channelA.presenceState());
-      if (ids.includes("alice") && ids.includes("bob")) resolve();
-    });
-  });
-  const broadcastReceived = new Promise<void>((resolve) => {
-    channelB.on("broadcast", { event: "signal" }, ({ payload }) => {
-      if (payload?.from === "alice" && payload?.to === "bob") resolve();
-    });
-  });
-  await Promise.all([subscribe(channelA), subscribe(channelB)]);
-  await Promise.all([channelA.track({ online: true }), channelB.track({ online: true })]);
-  await bothPresent;
-  const result = await channelA.send({ type: "broadcast", event: "signal", payload: { from: "alice", to: "bob", kind: "offer" } });
-  if (result !== "ok") throw new Error(`Broadcast falhou: ${result}`);
-  await broadcastReceived;
-  console.log("Supabase Realtime: presença e Broadcast funcionando.");
+  const broadcast = new Promise<void>((resolve) => channel.on("broadcast", { event: "signal" }, ({ payload }) => {
+    if (payload?.from === "alice" && payload?.to === "bob") resolve();
+  }));
+  await new Promise<void>((resolve, reject) => channel.subscribe((status) => {
+    if (status === "SUBSCRIBED") resolve();
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") reject(new Error(status));
+  }));
+  await channel.track({ online: true });
+  let present!: () => void;
+  const presence = new Promise<void>((resolve) => { present = resolve; });
+  alice = connectRoom(room, "alice", { onStatus() {}, onSignal() {}, onPeers: (peers) => { if (peers.includes("bob")) present(); } }, { url, key, production: true });
+  // Exercise the real adapter's bounded pre-subscription queue and server ACK.
+  if (!await alice.send({ from: "alice", to: "bob", owner: "alice", kind: "offer", data: { type: "offer", sdp: "smoke" } })) throw new Error("Broadcast não foi confirmado.");
+  await Promise.all([broadcast, presence]);
+  console.log("Supabase Realtime: adaptador, fila, ACK, presença e Broadcast funcionando.");
 }
 
-void main().catch((error) => { console.error(error); process.exitCode = 1; });
+void Promise.race([run(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Tempo esgotado no Realtime.")), 15_000); })])
+  .catch((error) => { console.error(error); process.exitCode = 1; })
+  .finally(async () => { clearTimeout(timer); alice?.close(); await bob.removeChannel(channel); bob.realtime.disconnect(); });

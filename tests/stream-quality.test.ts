@@ -42,6 +42,28 @@ test("capture offers tab audio but excludes window and system audio", () => {
   assert.equal((options.video as MediaTrackConstraints).displaySurface, "window");
 });
 
+test("overlapping sender updates retain order and cap the shared upload budget", async () => {
+  let transaction = 0;
+  const rates: number[] = [];
+  const sender = {
+    track: { getSettings: () => ({ height: 1080 }) },
+    getParameters: () => ({ transactionId: String(transaction), encodings: [{}] }),
+    setParameters: async (next: RTCRtpSendParameters) => {
+      const expected = String(transaction);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal(next.transactionId, expected);
+      assert.equal(String(transaction), expected);
+      rates.push(next.encodings[0].maxBitrate!);
+      transaction++;
+    },
+  } as unknown as RTCRtpSender;
+  assert.deepEqual(await Promise.all([
+    applyScreenSettings(sender, defaultStreamSettings, 1_000_000),
+    applyScreenSettings(sender, defaultStreamSettings, 2_000_000),
+  ]), [true, true]);
+  assert.deepEqual(rates, [1_000_000, 2_000_000]);
+});
+
 test("non-tab capture never retains its audio track", () => {
   let stopped = false;
   let removed = false;

@@ -23,11 +23,16 @@ export type PeerMetrics = {
   processingMs: number | null;
   qualityLimitationReason: string | null;
   codec: string | null;
+  availableOutgoingKbps: number | null;
+  targetBitrateKbps: number | null;
+  videoBitrateKbps: number | null;
+  encoderImplementation: string | null;
 };
 
 export type StatsSnapshot = {
   timestamp: number;
   bytes: number;
+  videoBytes: number;
   packetsLost: number;
   packetsReceived: number;
   frames: number;
@@ -66,7 +71,7 @@ export function readPeerMetrics(
   const video = media.find((entry) => entry.kind === "video" || entry.mediaType === "video");
   const source = entries.find((entry) => entry.id === video?.mediaSourceId && entry.type === "media-source");
   const codec = entries.find((entry) => entry.id === video?.codecId && entry.type === "codec");
-  const remoteInbound = entries.find((entry) => entry.type === "remote-inbound-rtp" && (entry.kind === "video" || entry.mediaType === "video"));
+  const remoteInbound = entries.find((entry) => entry.type === "remote-inbound-rtp" && (entry.localId === video?.id || entry.id === video?.remoteId || (!entry.localId && !video?.remoteId)) && (entry.kind === "video" || entry.mediaType === "video"));
   const bytes = media.reduce((total, entry) => total + (number(direction === "send" ? entry.bytesSent : entry.bytesReceived) ?? 0), 0);
   const timestamp = Math.max(0, ...media.map((entry) => number(entry.timestamp) ?? 0));
   const lostValue = number(video?.packetsLost);
@@ -82,7 +87,8 @@ export function readPeerMetrics(
   const encodedFrames = number(video?.framesEncoded) ?? 0;
   const renderedFrames = number(video?.framesRendered) ?? 0;
   const processingTime = number(direction === "send" ? video?.totalEncodeTime : video?.totalDecodeTime) ?? 0;
-  const snapshot = { timestamp, bytes, packetsLost, packetsReceived, frames, droppedFrames, freezes, encodedFrames, renderedFrames, processingTime };
+  const videoBytes = number(direction === "send" ? video?.bytesSent : video?.bytesReceived) ?? 0;
+  const snapshot = { timestamp, bytes, videoBytes, packetsLost, packetsReceived, frames, droppedFrames, freezes, encodedFrames, renderedFrames, processingTime };
   const seconds = previous && timestamp > previous.timestamp ? (timestamp - previous.timestamp) / 1000 : 0;
   const byteDelta = delta(bytes, previous?.bytes);
   const bitrateKbps = seconds > 0 && byteDelta !== null ? rounded(byteDelta * 8 / seconds / 1000) : null;
@@ -117,12 +123,16 @@ export function readPeerMetrics(
   if (connection === "failed" || connection === "disconnected" || connection === "closed") health = "poor";
   else if (connection === "connected") {
     if ((lossPercent ?? 0) >= 10 || (rttMs ?? 0) >= 700 || (jitterMs ?? 0) >= 100 || (freezeDelta ?? 0) >= 2) health = "poor";
-    else if ((lossPercent ?? 0) >= 3 || (rttMs ?? 0) >= 250 || (jitterMs ?? 0) >= 40 || (freezeDelta ?? 0) > 0 || (droppedDelta ?? 0) >= 3) health = "degraded";
+    else if (video?.qualityLimitationReason === "cpu" || video?.qualityLimitationReason === "bandwidth" || (lossPercent ?? 0) >= 3 || (rttMs ?? 0) >= 250 || (jitterMs ?? 0) >= 40 || (freezeDelta ?? 0) > 0 || (droppedDelta ?? 0) >= 3) health = "degraded";
   }
 
   return {
     metrics: {
       id, direction, connection, health, bitrateKbps, rttMs, jitterMs, fps: rounded(fps), lossPercent,
+      availableOutgoingKbps: direction === "send" && number(pair?.availableOutgoingBitrate) !== null ? rounded((number(pair?.availableOutgoingBitrate) ?? 0) / 1000) : null,
+      targetBitrateKbps: number(video?.targetBitrate) !== null ? rounded((number(video?.targetBitrate) ?? 0) / 1000) : null,
+      videoBitrateKbps: seconds > 0 && previous && videoBytes >= previous.videoBytes ? rounded((videoBytes - previous.videoBytes) * 8 / seconds / 1000) : null,
+      encoderImplementation: typeof video?.encoderImplementation === "string" ? video.encoderImplementation : null,
       droppedFrames: droppedValue, freezes: freezeValue,
       recentDroppedFrames: droppedDelta, recentFreezes: freezeDelta,
       width: number(video?.frameWidth), height: number(video?.frameHeight),

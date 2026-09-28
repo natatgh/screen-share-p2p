@@ -1,3 +1,4 @@
+import type { VideoCodec } from "./codec-preference";
 export type StreamMode = "balanced" | "smooth" | "detail";
 export type StreamResolution = 720 | 1080 | "source";
 export type StreamFrameRate = 15 | 30 | 60;
@@ -5,6 +6,9 @@ export type StreamSettings = {
   mode: StreamMode;
   resolution: StreamResolution;
   frameRate: StreamFrameRate;
+  /** Optional measured upload ceiling shared by all viewers, in Mbps. */
+  uploadBudgetMbps?: number;
+  codec?: VideoCodec;
 };
 
 export const defaultStreamSettings: StreamSettings = {
@@ -61,11 +65,23 @@ export function encodingForSettings(settings: StreamSettings, sourceHeight?: num
   };
 }
 
-export async function applyScreenSettings(sender: RTCRtpSender, settings: StreamSettings): Promise<boolean> {
+// Polling and manual changes share a sender. Read transactionId only when the
+// previous update completes, so overlapping setParameters cannot invalidate it.
+const senderUpdates = new WeakMap<RTCRtpSender, Promise<boolean>>();
+
+export function applyScreenSettings(sender: RTCRtpSender, settings: StreamSettings, bitrateBudget?: number): Promise<boolean> {
+  const next = (senderUpdates.get(sender) ?? Promise.resolve(true))
+    .then(() => updateScreenSettings(sender, settings, bitrateBudget));
+  senderUpdates.set(sender, next);
+  return next;
+}
+
+async function updateScreenSettings(sender: RTCRtpSender, settings: StreamSettings, bitrateBudget?: number): Promise<boolean> {
   try {
     const parameters = sender.getParameters();
     if (!parameters.encodings?.length) parameters.encodings = [{}];
     Object.assign(parameters.encodings[0], encodingForSettings(settings, sender.track?.getSettings().height));
+    if (bitrateBudget !== undefined) parameters.encodings[0].maxBitrate = Math.min(parameters.encodings[0].maxBitrate!, Math.max(100_000, bitrateBudget));
     parameters.degradationPreference = settings.mode === "smooth" ? "maintain-framerate" : settings.mode === "detail" ? "maintain-resolution" : "balanced";
     await sender.setParameters(parameters);
     return true;
