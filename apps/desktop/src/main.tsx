@@ -12,6 +12,7 @@ import type { CaptureSource } from "./types";
 import workletUrl from "./pcm-worklet.js?url";
 import lumenIconUrl from "../assets/lumen-icon.png";
 import "./style.css";
+import "../../../src/styles/native-controls.css";
 
 function LogoMark() {
   return <img className="brand-icon" src={lumenIconUrl} alt="" />;
@@ -200,6 +201,12 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
   });
   const [starting, setStarting] = useState(false);
   const [shareModal, setShareModal] = useState(false);
+  useEffect(() => {
+    if (!shareModal) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [shareModal]);
   const start = async () => { setStarting(true); try { await startSharing(); setShareModal(false); } finally { setStarting(false); } };
   const pick = async (source: CaptureSource) => { if (sharing) stopSharing(); await select(source); };
   const invite = `https://screen-share-p2p.vercel.app/room/${code}`;

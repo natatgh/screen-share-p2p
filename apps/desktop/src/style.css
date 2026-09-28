@@ -48,3 +48,12 @@
 
 .broadcast-hint{display:flex;align-items:center;gap:10px;color:#A9A69E;font-size:12px}
 .broadcast-hint svg{color:#FFC24B;flex-shrink:0}
+
+/* Keep scrollable content inside the dialog, below the Windows title bar. */
+.modal-backdrop{top:48px;padding:16px;overscroll-behavior:contain}
+.share-modal{max-height:calc(100dvh - 80px)}
+.modal-header,.modal-footer{flex-shrink:0}
+.modal-body{min-height:0;overscroll-behavior:contain;scrollbar-gutter:stable}
+.field input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;font-size:12px;letter-spacing:0;font-weight:500}
+.field input::placeholder{font-weight:400}
+@media(max-width:900px){.share-modal{max-height:calc(100dvh - 80px)}}
