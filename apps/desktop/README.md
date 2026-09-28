@@ -1,6 +1,6 @@
 # Lumen Desktop (Windows 11)
 
-Aplicativo Electron para assistir e compartilhar nas salas do Lumen. Entrar numa sala não inicia captura: as pessoas e transmissões aparecem no painel central. O botão **Compartilhar tela** abre o seletor de fonte e qualidade. Vídeo é capturado da janela/monitor selecionado pelo Electron. O áudio de janela é capturado do processo do aplicativo e seus filhos por um auxiliar C++ que usa WASAPI Application Loopback. Um navegador ou aplicativo com várias janelas pode produzir áudio de todas elas; o seletor avisa sobre isso. Monitor transmite somente vídeo. Se o áudio falhar, a transmissão continua com vídeo.
+Aplicativo Electron para assistir e compartilhar nas salas do Lumen. Entrar numa sala não inicia captura: as pessoas e transmissões aparecem no painel central. O botão **Compartilhar tela** abre o seletor de fonte e qualidade. Vídeo é capturado da janela/monitor selecionado pelo Electron. O áudio de janela é capturado do processo do aplicativo e seus filhos por um auxiliar C++ que usa WASAPI Application Loopback. Um navegador ou aplicativo com várias janelas pode produzir áudio de todas elas; o seletor avisa sobre isso. Monitor pode transmitir áudio de todos os aplicativos, exceto a árvore de processos do Lumen para evitar eco. Esse áudio não se limita às janelas visíveis no monitor escolhido. A opção de áudio pode ser desligada antes da transmissão. Janela nunca faz fallback para o áudio do sistema. Se o áudio falhar, a transmissão continua com vídeo.
 
 ## Desenvolver
 

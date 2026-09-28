@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import { checkForUpdate, installPendingUpdate, type Distribution } from "./updater";
+import { audioSourceArgs } from "./audio-source";
 
 let mainWindow: BrowserWindow | null = null;
 let sources = new Map<string, DesktopCapturerSource>();
@@ -28,10 +29,10 @@ function audioHelperPath(): string {
 
 async function startAudio(): Promise<{ ok: boolean; error?: string }> {
   stopAudio();
-  const match = selectedSource?.id.match(/^window:(\d+):[01]$/);
-  if (!match) return { ok: false, error: "Áudio disponível somente para janelas." };
+  const args = audioSourceArgs(selectedSource?.id, process.pid);
+  if (!args) return { ok: false, error: "Selecione uma janela ou monitor para compartilhar áudio." };
   return new Promise((resolve) => {
-    const child = spawn(audioHelperPath(), [match[1]], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(audioHelperPath(), args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     audioProcess = child;
     let settled = false;
     let detail = "Não foi possível iniciar o áudio do aplicativo.";

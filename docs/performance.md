@@ -21,7 +21,7 @@ Exportar diagnóstico salva localmente até 150 amostras, em intervalos de dois 
 3. Exportar relatórios do transmissor e de um espectador. Comparar FPS de captura, codificação e exibição, tempo por quadro, congelamentos e upload total.
 4. Meta para qualificar 1080p/30: >=27 FPS codificados/exibidos em pelo menos 90% das amostras válidas após aquecimento, e nenhum congelamento >1 segundo no teste. Isso é critério de teste, não garantia em qualquer PC/rede.
 5. No diagnóstico, comparar Automático, H.264 e VP9. A seleção é uma preferência: browsers sem suporte mantêm o fallback. Confirmar o codec efetivamente negociado nos detalhes. Não trocar o padrão global até obter >=15% de ganho em CPU ou banda, sem regressão de FPS/congelamentos ou nitidez.
-6. Testar aplicativo comum, jogo, navegador e monitor; dois aplicativos tocando som simultaneamente; somente a árvore do processo escolhido deve transmitir áudio. Monitor continua sem áudio. Testar parada, falha do auxiliar e troca de fonte.
+6. Testar aplicativo comum, jogo, navegador e monitor; dois aplicativos tocando som simultaneamente; somente a árvore do processo escolhido deve transmitir áudio. Monitor com áudio ligado deve transmitir ambos os aplicativos, mas não o som reproduzido pelo próprio Lumen; com áudio desligado, transmitir somente vídeo. Janelas do mesmo processo podem ter áudio combinado. Testar parada, falha do auxiliar e troca de fonte.
 
 O teste Playwright usa uma fonte sintética em movimento com três navegadores receptores e exercita offer/answer, ICE restart por injeção de falha, mudança de qualidade/codec, reconexão da sinalização e parada. Ele não mede captura de jogo, aceleração GPU, áudio WASAPI real ou qualidade visual perceptual. Esses testes permanecem manuais no Windows 11.
 

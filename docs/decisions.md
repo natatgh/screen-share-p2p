@@ -23,3 +23,10 @@
 ## ADR 006 — Áudio limitado à fonte compartilhada
 
 **Decisão:** solicitar `systemAudio: "exclude"` e `windowAudio: "exclude"` na captura e descartar qualquer trilha de áudio devolvida quando a fonte não for uma aba do navegador. **Motivo:** Chrome e Edge ainda não oferecem suporte confiável a `windowAudio: "window"`; uma janela pode vir acompanhada de áudio do sistema. **Consequência:** abas podem compartilhar áudio; janelas e monitores compartilham apenas vídeo até existir uma captura de áudio por aplicativo confiável. A seleção final da fonte continua sob controle do usuário.
+
+## ADR 007 — Áudio por fonte (0.3.1, substitui ADR 006 para monitores)
+
+Desktop: janela inclui somente a árvore de processos do aplicativo; monitor inclui áudio de todos os processos, exceto a árvore do Lumen, com WASAPI Process Loopback em modo EXCLUDE. Isso evita retransmitir o som recebido na própria sala. O áudio do sistema não está ligado ao monitor físico. Não há fallback de janela para sistema; falha mantém somente vídeo. Não é possível garantir isolamento de duas janelas do mesmo processo.
+
+Web: solicitar systemAudio include e windowAudio exclude; conservar áudio autorizado de abas e monitores, descartar áudio de janelas ou fonte desconhecida. O navegador controla consentimento e disponibilidade. Para janela com som do aplicativo, usar o Desktop.
+

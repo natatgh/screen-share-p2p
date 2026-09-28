@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { connectRoom, type Signal, type Signaling, type SignalingConfig } from "./signaling";
 import { readPeerMetrics, type PeerMetrics, type StatsSnapshot } from "./rtc-stats";
 import { effectiveSettings, initialAdaptation, nextAdaptation, sharedBitrateBudget, type AdaptationState } from "./adaptive-quality";
-import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, removeNonTabAudio, type StreamSettings } from "./stream-quality";
+import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, removeUnscopedWindowAudio, type StreamSettings } from "./stream-quality";
 
 import { DiagnosticReport, playbackFps, type RuntimeMetrics } from "./diagnostic-report";
 import { preferVideoCodec } from "./codec-preference";
@@ -184,7 +184,7 @@ export function useRoom(room: string, options?: RoomOptions) {
         ? await optionsRef.current.capture.start(settingsRef.current)
         : await navigator.mediaDevices.getDisplayMedia(displayCaptureOptions(settingsRef.current));
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
-      if (!optionsRef.current?.capture) removeNonTabAudio(stream);
+      if (!optionsRef.current?.capture && removeUnscopedWindowAudio(stream)) setSettingsWarning("Áudio de janela isolado está disponível no Lumen Desktop. No navegador, escolha uma aba para som isolado ou um monitor para áudio do sistema.");
       stream.getVideoTracks()[0].contentHint = contentHintForSettings(settingsRef.current);
       globalAdaptation.current = { ...initialAdaptation };
       captureStep.current = 0;

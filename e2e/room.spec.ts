@@ -38,11 +38,35 @@ test("one sender reaches three viewers, survives signaling reconnect, changes qu
         const canvas = document.createElement("canvas"); canvas.width = 1920; canvas.height = 1080;
         const context = canvas.getContext("2d")!;
         const draw = () => { context.fillStyle = `hsl(${performance.now() / 10 % 360}, 70%, 50%)`; context.fillRect(0, 0, canvas.width, canvas.height); requestAnimationFrame(draw); };
-        draw(); return canvas.captureStream(30);
+        draw();
+        const stream = canvas.captureStream(30);
+        const track = stream.getVideoTracks()[0];
+        const settings = track.getSettings.bind(track);
+        track.getSettings = () => ({ ...settings(), displaySurface: "monitor" });
+        const audio = new AudioContext();
+        const tone = audio.createOscillator();
+        const destination = audio.createMediaStreamDestination();
+        tone.connect(destination); tone.start();
+        await audio.resume();
+        stream.addTrack(destination.stream.getAudioTracks()[0]);
+        track.addEventListener("ended", () => void audio.close(), { once: true });
+        return stream;
       } });
     });
     await sender.getByRole("button", { name: "Compartilhar tela", exact: true }).click();
-    for (const page of pages.slice(1)) await plays(page);
+    for (const page of pages.slice(1)) {
+      await plays(page);
+      await expect.poll(() => page.evaluate(async () => {
+        const links = (window as unknown as { __testPeers: RTCPeerConnection[] }).__testPeers;
+        for (const pc of links) {
+          const stats = await pc.getStats();
+          for (const entry of stats.values()) {
+            if (entry.type === "inbound-rtp" && entry.kind === "audio" && entry.bytesReceived > 0 && entry.totalAudioEnergy > 0) return true;
+          }
+        }
+        return false;
+      }), { timeout: 15_000 }).toBe(true);
+    }
     // Fault injection exercises a real ICE restart and new offer/answer exchange.
     const original = await sender.evaluate(() => {
       const pc = (window as unknown as { __testPeers: RTCPeerConnection[] }).__testPeers.find((item) => item.connectionState === "connected")!;
