@@ -3,7 +3,8 @@
 .summary{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:#202127;color:#F4F1EA}
 .summaryIcon{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;flex-shrink:0;background:#2C2E36;color:#A9A69E}
 .summary strong{display:block;font-size:15px;font-weight:600}
-.summary span{display:block;font-size:13px;color:#B7B3AA;margin-top:1px}
+.summary>div>span{display:block;font-size:13px;color:#B7B3AA;margin-top:1px}
+.summaryIcon svg{display:block}
 .summary.good{background:#16251F}
 .summary.good .summaryIcon{background:#6FD4A8;color:#0B2219}
 .summary.good span{color:#B7D9C9}
@@ -41,3 +42,7 @@
 
 .empty{margin:0;padding:16px;border-radius:12px;border:1px dashed #33353E;font-size:13px;line-height:1.5;color:#A9A69E}
 .note{margin:0;font-size:12px;line-height:1.5;color:#8A877F}
+
+.exportButton{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:10px 14px;border:1px solid #5c4a1c;border-radius:9px;background:#2a2618;color:#f4f1ea;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.exportButton:hover{border-color:#ffc24b;background:#39301e}
+.exportButton svg{display:block;flex-shrink:0}

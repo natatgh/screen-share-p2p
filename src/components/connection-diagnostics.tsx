@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import { Download, ShieldCheck } from "lucide-react";
 import type { VideoCodec } from "../lib/codec-preference";
 import type { RuntimeMetrics } from "../lib/diagnostic-report";
 import type { MediaHealth, PeerMetrics } from "../lib/rtc-stats";
@@ -87,7 +87,7 @@ export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality,
     })}</div> : <p className={styles.empty}>Sem transmissão P2P ativa. As métricas aparecem quando alguém compartilha e outra pessoa assiste.</p>}
     {onCodecChange && <label className={styles.adaptive}><span>Codec para comparação<small>Automático é o padrão. Confirme o codec efetivo nos detalhes.</small></span><select value={codec ?? "auto"} onChange={(event) => onCodecChange(event.target.value as VideoCodec)}><option value="auto">Automático</option><option value="H264">H.264</option><option value="VP9">VP9</option><option value="VP8">VP8</option></select></label>}
     {runtime && <div className={styles.values}><div><span>CPU do Lumen</span><strong>{runtime.cpuPercent.toFixed(1)}%</strong></div><div><span>Memória</span><strong>{runtime.memoryMb.toFixed(0)} MB</strong></div>{runtime.audioBufferedMs !== undefined && <div><span>Buffer de áudio</span><strong>{runtime.audioBufferedMs.toFixed(0)} ms</strong></div>}</div>}
-    {onExport && <button type="button" onClick={onExport}>Exportar diagnóstico (últimos 5 minutos)</button>}
+    {onExport && <button type="button" className={styles.exportButton} onClick={onExport}><Download size={16} aria-hidden="true" />Exportar diagnóstico (últimos 5 minutos)</button>}
     <p className={styles.note}>Sinalização da sala: {status}. RTT mede a conexão entre participantes; quadros descartados e congelamentos dependem dos dados do navegador.</p>
   </div>;
 }
