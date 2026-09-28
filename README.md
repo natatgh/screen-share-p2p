@@ -2,7 +2,7 @@
 
 MVP de salas temporárias para compartilhar tela, janela ou monitor pelo navegador. Qualquer participante pode transmitir; os demais podem assistir. Sem conta, sem gravação, sem LiveKit ou coturn.
 
-O **Lumen Desktop para Windows 11** fica em `apps/desktop`. Ele entra nas mesmas salas para assistir ou transmitir, sem iniciar captura ao entrar. A transmissão pode incluir vídeo de uma janela ou monitor e, para janelas, áudio do processo do aplicativo. Espectadores também podem usar a página web. Veja [as instruções do desktop](apps/desktop/README.md).
+O **Lumen Desktop para Windows 11** fica em `apps/desktop`. Ele entra nas mesmas salas para assistir ou transmitir, sem iniciar captura ao entrar. A transmissão pode incluir vídeo de uma janela ou monitor áudio do processo do aplicativo para janelas e áudio do sistema para monitores (excluindo o Lumen). Espectadores também podem usar a página web. Veja [as instruções do desktop](apps/desktop/README.md).
 
 Em cada sala, o painel **Diagnóstico** acompanha a sinalização e, durante uma transmissão P2P, mostra banda de envio/recebimento, RTT, jitter, perda de pacotes, FPS e indicadores de congelamento. As métricas são locais e não ficam gravadas.
 
@@ -19,7 +19,7 @@ Abra http://localhost:3000, crie uma sala e abra o link em outra aba ou navegado
 
 Na sala, abra **Qualidade** para escolher a preferência de codificação (Equilibrado, Vídeo mais fluido ou Texto mais nítido), a resolução (720p, 1080p ou Original) e os quadros por segundo (15, 30 ou 60). O padrão é Equilibrado, 1080p e 30 FPS. É possível mudar os ajustes durante a transmissão; o app tenta atualizar a captura e os envios ativos. O navegador pode limitar a qualidade efetiva. Cada espectador consome upload adicional, especialmente em 60 FPS.
 
-Na captura, o app sugere a seleção de uma janela, mas compartilha áudio **somente quando uma aba do navegador é selecionada**. O áudio de janelas e monitores é desativado, mesmo se o navegador devolver uma trilha de áudio, pois Chrome e Edge ainda não oferecem uma forma confiável de limitar a captura de áudio a uma janela específica. A sala mostra quando não há áudio compartilhado.
+No site, o seletor do navegador pode compartilhar áudio da aba ou do sistema ao escolher um monitor. Habilite a opção de som no seletor; o suporte depende do navegador/Windows. Para janela com áudio isolado do aplicativo, use o Desktop: no navegador, janelas continuam sem áudio para evitar capturar o sistema por engano. No Desktop, o áudio da janela corresponde à árvore do processo e pode incluir outras janelas/abas do mesmo aplicativo; não há isolamento garantido por janela.
 
 ## Deploy gratuito
 

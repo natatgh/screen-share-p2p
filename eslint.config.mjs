@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "apps/desktop/dist-main/**",
     "apps/desktop/dist-renderer/**",
     "apps/desktop/release/**",
+    "test-results/**",
+    "playwright-report/**",
   ]),
   { files: ["apps/desktop/src/**/*.{ts,tsx}"], rules: { "@next/next/no-img-element": "off" } },
 ]);

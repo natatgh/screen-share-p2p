@@ -36,19 +36,20 @@ export function captureConstraintsForSettings(settings: StreamSettings): MediaTr
   };
 }
 
-type ScopedDisplayMediaOptions = DisplayMediaStreamOptions & { systemAudio: "exclude"; windowAudio: "exclude" };
+type ScopedDisplayMediaOptions = DisplayMediaStreamOptions & { systemAudio: "include"; windowAudio: "exclude" };
 
 export function displayCaptureOptions(settings: StreamSettings): ScopedDisplayMediaOptions {
   return {
     video: { ...captureConstraintsForSettings(settings), displaySurface: "window" },
     audio: true,
-    systemAudio: "exclude",
+    systemAudio: "include",
     windowAudio: "exclude",
   };
 }
 
-export function removeNonTabAudio(stream: MediaStream): boolean {
-  if (stream.getVideoTracks()[0]?.getSettings().displaySurface === "browser") return false;
+export function removeUnscopedWindowAudio(stream: MediaStream): boolean {
+  const surface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
+  if (surface === "browser" || surface === "monitor") return false;
   for (const track of stream.getAudioTracks()) {
     track.stop();
     stream.removeTrack(track);

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, encodingForSettings, removeNonTabAudio } from "../src/lib/stream-quality";
+import { applyScreenSettings, captureConstraintsForSettings, contentHintForSettings, defaultStreamSettings, displayCaptureOptions, encodingForSettings, removeUnscopedWindowAudio } from "../src/lib/stream-quality";
 
 test("resolution and frame rate can be selected independently", () => {
   assert.deepEqual(defaultStreamSettings, { mode: "balanced", resolution: 1080, frameRate: 30 });
@@ -34,10 +34,10 @@ test("changing settings updates the video sender", async () => {
   assert.equal(applied?.degradationPreference, "maintain-framerate");
 });
 
-test("capture offers tab audio but excludes window and system audio", () => {
+test("capture offers tab and monitor audio but excludes unscoped window audio", () => {
   const options = displayCaptureOptions(defaultStreamSettings);
   assert.equal(options.audio, true);
-  assert.equal(options.systemAudio, "exclude");
+  assert.equal(options.systemAudio, "include");
   assert.equal(options.windowAudio, "exclude");
   assert.equal((options.video as MediaTrackConstraints).displaySurface, "window");
 });
@@ -64,26 +64,28 @@ test("overlapping sender updates retain order and cap the shared upload budget",
   assert.deepEqual(rates, [1_000_000, 2_000_000]);
 });
 
-test("non-tab capture never retains its audio track", () => {
+test("window capture never retains a potentially system-wide audio track", () => {
   let stopped = false;
   let removed = false;
   const audio = { stop: () => { stopped = true; } } as MediaStreamTrack;
   const stream = {
-    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: "monitor" }) }],
+    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: "window" }) }],
     getAudioTracks: () => [audio],
     removeTrack: (track: MediaStreamTrack) => { removed = track === audio; },
   } as unknown as MediaStream;
-  assert.equal(removeNonTabAudio(stream), true);
+  assert.equal(removeUnscopedWindowAudio(stream), true);
   assert.equal(stopped, true);
   assert.equal(removed, true);
 });
 
-test("tab capture keeps its own audio track", () => {
+test("tab and monitor capture retain the audio authorized in the browser picker", () => {
   let stopped = false;
-  const stream = {
-    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: "browser" }) }],
+  for (const surface of ["browser", "monitor"]) {
+    const stream = {
+    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: surface }) }],
     getAudioTracks: () => [{ stop: () => { stopped = true; } }],
   } as unknown as MediaStream;
-  assert.equal(removeNonTabAudio(stream), false);
+  assert.equal(removeUnscopedWindowAudio(stream), false);
   assert.equal(stopped, false);
+  }
 });

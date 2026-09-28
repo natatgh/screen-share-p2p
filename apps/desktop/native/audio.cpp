@@ -8,6 +8,7 @@
 #include <wrl/implements.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cwchar>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -42,14 +43,23 @@ static int fail(const char* stage, HRESULT result) {
 }
 
 int wmain(int argc, wchar_t** argv) {
-  if (argc != 2) return fail("ID da janela ausente", E_INVALIDARG);
+  const bool systemAudio = argc == 3 && std::wcscmp(argv[1], L"--system") == 0;
+  if (argc != 2 && !systemAudio) return fail("Fonte de áudio inválida", E_INVALIDARG);
   wchar_t* end = nullptr;
-  unsigned long long id = _wcstoui64(argv[1], &end, 10);
+  unsigned long long id = _wcstoui64(argv[systemAudio ? 2 : 1], &end, 10);
   if (!id || !end || *end != L'\0') return fail("ID da janela inválido", E_INVALIDARG);
-  HWND hwnd = reinterpret_cast<HWND>(static_cast<uintptr_t>(id));
-  if (!IsWindow(hwnd)) return fail("Janela não encontrada", E_INVALIDARG);
   DWORD processId = 0;
-  if (!GetWindowThreadProcessId(hwnd, &processId) || !processId) return fail("Processo da janela indisponível", E_FAIL);
+  if (systemAudio) {
+    if (id > MAXDWORD) return fail("Processo inválido", E_INVALIDARG);
+    processId = static_cast<DWORD>(id);
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (!process) return fail("Processo do Lumen indisponível", HRESULT_FROM_WIN32(GetLastError()));
+    CloseHandle(process);
+  } else {
+    HWND hwnd = reinterpret_cast<HWND>(static_cast<uintptr_t>(id));
+    if (!IsWindow(hwnd)) return fail("Janela não encontrada", E_INVALIDARG);
+    if (!GetWindowThreadProcessId(hwnd, &processId) || !processId) return fail("Processo da janela indisponível", E_FAIL);
+  }
 
   HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   if (FAILED(hr)) return fail("Falha ao iniciar COM", hr);
@@ -61,7 +71,11 @@ int wmain(int argc, wchar_t** argv) {
   AUDIOCLIENT_ACTIVATION_PARAMS params{};
   params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
   params.ProcessLoopbackParams.TargetProcessId = processId;
-  params.ProcessLoopbackParams.ProcessLoopbackMode = PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
+  // Monitor: capture all applications except Lumen to avoid rebroadcasting viewers.
+  // Window: capture only that application's process tree, never the system mix.
+  params.ProcessLoopbackParams.ProcessLoopbackMode = systemAudio
+    ? PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE
+    : PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
   PROPVARIANT variant{};
   variant.vt = VT_BLOB;
   variant.blob.cbSize = sizeof(params);
