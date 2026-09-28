@@ -186,6 +186,9 @@ export function useRoom(room: string, options?: RoomOptions) {
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
       if (!optionsRef.current?.capture) removeNonTabAudio(stream);
       stream.getVideoTracks()[0].contentHint = contentHintForSettings(settingsRef.current);
+      globalAdaptation.current = { ...initialAdaptation };
+      captureStep.current = 0;
+      adaptation.current.clear();
       local.current = stream;
       setLocalStream(stream);
       stream.getVideoTracks()[0].addEventListener("ended", stopSharing, { once: true });
@@ -299,8 +302,8 @@ export function useRoom(room: string, options?: RoomOptions) {
         const currentKeys = new Set(links.map(({ id, direction }) => `${direction}:${id}`));
         for (const key of previous.keys()) if (!currentKeys.has(key)) previous.delete(key);
         const samples = result.flatMap((item) => item.status === "fulfilled" && item.value ? [item.value] : []);
+        const senders = samples.filter((sample) => sample.direction === "send" && sample.connection === "connected");
         if (adaptiveRef.current) {
-          const senders = samples.filter((sample) => sample.direction === "send" && sample.connection === "connected");
           const cpuSample = senders.find((sample) => sample.qualityLimitationReason === "cpu");
           const healthySample = senders.find((sample) => sample.qualityLimitationReason === "none");
           if (cpuSample || healthySample) globalAdaptation.current = nextAdaptation(globalAdaptation.current, { ...(cpuSample ?? healthySample!), rttMs: null, lossPercent: null, captureFps: cpuSample?.captureFps ?? null }, settingsRef.current, Date.now());
@@ -310,12 +313,16 @@ export function useRoom(room: string, options?: RoomOptions) {
             try { await track.applyConstraints(captureConstraintsForSettings(effectiveSettings(settingsRef.current, globalStep))); captureStep.current = globalStep; }
             catch { setSettingsWarning("O navegador não conseguiu reduzir a captura automaticamente."); }
           }
-          const budget = sharedBitrateBudget(samples, settingsRef.current.uploadBudgetMbps);
+        }
+        // The explicit upload ceiling applies even with automatic quality off.
+        const budget = sharedBitrateBudget(samples, settingsRef.current.uploadBudgetMbps);
+        {
+          const globalStep = adaptiveRef.current ? globalAdaptation.current.step : 0;
           for (const sample of senders) {
             const link = outbound.current.get(sample.id);
             if (!link) continue;
             const prior = adaptation.current.get(sample.id) ?? { ...initialAdaptation };
-            const next = nextAdaptation(prior, sample, settingsRef.current, Date.now());
+            const next = adaptiveRef.current ? nextAdaptation(prior, sample, settingsRef.current, Date.now()) : { ...initialAdaptation };
             adaptation.current.set(sample.id, next);
             const sender = link.pc.getSenders().find((item) => item.track?.kind === "video");
             if (sender) {
