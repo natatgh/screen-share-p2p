@@ -1,0 +1,38 @@
+/* Shared by the website and Electron: native controls follow the Lumen theme. */
+:root { color-scheme: dark; }
+* { scrollbar-width: thin; scrollbar-color: #75613f #14151a; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: #14151a; }
+::-webkit-scrollbar-thumb {
+  background: #75613f;
+  border: 2px solid #14151a;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: #ad8847; }
+::-webkit-scrollbar-button { display: none; }
+
+:where(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"])) {
+  color: #f4f1ea;
+  background-color: #111216;
+  border: 1px solid #484238;
+  border-radius: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+  font: inherit;
+  caret-color: #ffc24b;
+}
+:where(input, textarea)::placeholder { color: #8a877f; opacity: 1; }
+:where(input, select, textarea):hover:not(:disabled) { border-color: #75613f; }
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #ffc24b;
+  outline-offset: 2px;
+}
+:where(input, select, textarea):disabled { opacity: .55; cursor: not-allowed; }
+:where(input[type="checkbox"], input[type="radio"], input[type="range"]) { accent-color: #ffc24b; }
+select option { background: #17181d; color: #f4f1ea; }
+input[type="number"]::-webkit-inner-spin-button { opacity: .65; }
+input[type="number"]:hover::-webkit-inner-spin-button { opacity: 1; }
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+  :where(button, a, input, select, textarea):focus-visible { outline-color: Highlight; }
+}

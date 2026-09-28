@@ -1,3 +1,5 @@
+@import "../styles/native-controls.css";
+
 :root{
   --bg:#0F1013;--bg-deep:#0A0A0C;
   --panel:#17181D;--panel-raised:#1F2027;--panel-sunken:#0F1013;
