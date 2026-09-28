@@ -57,3 +57,11 @@
 .field input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;font-size:12px;letter-spacing:0;font-weight:500}
 .field input::placeholder{font-weight:400}
 @media(max-width:900px){.share-modal{max-height:calc(100dvh - 80px)}}
+
+/* Separate the heading, diagnostics and media/member sections. */
+.diagnostics-panel{margin-top:18px;flex-shrink:0}
+.diagnostics-body{padding:14px}
+.diagnostics-toggle:focus-visible{outline-offset:-3px;border-radius:11px}
+.diagnostics-toggle svg,.viewer-count svg,.people-heading svg,.person>svg{display:block;flex-shrink:0}
+.topbar{width:100%;isolation:isolate}
+.topbar::after{content:"";position:absolute;inset:auto 0 0;height:1px;background:#38332b;pointer-events:none}

@@ -50,7 +50,7 @@ function UpdateMenu({ version, status, onCheck, onReleases }: { version: string;
 function TitleBar({ code, status, version, updateStatus, onCheckUpdate, onOpenReleases }: { code?: string; status?: string; version?: string; updateStatus?: string; onCheckUpdate?: () => void; onOpenReleases?: () => void }) {
   return <header className="topbar" aria-label="Barra da janela">
     <div className="topbar-safe">
-      <div className="brand"><LogoMark />Lumen<span className="mint">.</span><span className="desktop-label">DESKTOP</span></div>
+      <div className="brand"><LogoMark />Lumen<span className="mint">.</span></div>
       <div className="topbar-right">
         {code && <><span className="room-code">Sala <b>{code}</b></span><span className={`connection ${status === "Conectado" ? "online" : ""}`}><span />{status}</span></>}
         {version !== undefined && <UpdateMenu version={version} status={updateStatus ?? ""} onCheck={onCheckUpdate!} onReleases={onOpenReleases!} />}

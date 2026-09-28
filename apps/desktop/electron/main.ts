@@ -69,7 +69,8 @@ async function createWindow(): Promise<void> {
     width: 1140, height: 760, minWidth: 860, minHeight: 600,
     backgroundColor: "#0F1013", title: "Lumen Desktop", icon,
     titleBarStyle: "hidden",
-    titleBarOverlay: { color: "#0F1013", symbolColor: "#F4F1EA", height: 48 },
+    // Reserve the last pixel of the 48px header for its full-width divider.
+    titleBarOverlay: { color: "#0F1013", symbolColor: "#F4F1EA", height: 47 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
