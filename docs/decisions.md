@@ -29,4 +29,3 @@
 Desktop: janela inclui somente a árvore de processos do aplicativo; monitor inclui áudio de todos os processos, exceto a árvore do Lumen, com WASAPI Process Loopback em modo EXCLUDE. Isso evita retransmitir o som recebido na própria sala. O áudio do sistema não está ligado ao monitor físico. Não há fallback de janela para sistema; falha mantém somente vídeo. Não é possível garantir isolamento de duas janelas do mesmo processo.
 
 Web: solicitar systemAudio include e windowAudio exclude; conservar áudio autorizado de abas e monitores, descartar áudio de janelas ou fonte desconhecida. O navegador controla consentimento e disponibilidade. Para janela com som do aplicativo, usar o Desktop.
-
