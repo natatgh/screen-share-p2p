@@ -109,6 +109,12 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("audio:start", async (event) => { trusted(event); return startAudio(); });
   ipcMain.handle("audio:stop", (event) => { trusted(event); stopAudio(); });
+  ipcMain.handle("app:metrics", (event) => {
+    trusted(event);
+    const metrics = app.getAppMetrics();
+    return { cpuPercent: metrics.reduce((sum, item) => sum + item.cpu.percentCPUUsage, 0),
+      memoryMb: metrics.reduce((sum, item) => sum + item.memory.workingSetSize, 0) / 1024 };
+  });
   ipcMain.handle("app:version", (event) => { trusted(event); return app.getVersion(); });
   ipcMain.handle("app:releases", async (event) => { trusted(event); await shell.openExternal(releasesUrl); });
   ipcMain.handle("update:check", async (event) => {

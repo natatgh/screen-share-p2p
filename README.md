@@ -38,10 +38,12 @@ Os canais Realtime são públicos e o código é a única barreira de entrada. O
 - `npm run dev:web`: interface apenas, para uso com Supabase configurado
 - `npm run dev:signal`: signaling local apenas
 - `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`: verificações
+- `npm run test:e2e`: vídeo sintético P2P com três espectadores, renegociação e parada
 - `npm run test:realtime`: verifica Presence e Broadcast no projeto Supabase configurado em `.env.local`
 
 ## Documentação
 
+- [Desempenho, diagnóstico e comparação de codecs](docs/performance.md)
 - [Arquitetura e limites](docs/architecture.md)
 - [Decisões técnicas](docs/decisions.md)
 - [Roadmap](docs/roadmap.md)

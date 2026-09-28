@@ -27,3 +27,7 @@ O Supabase Realtime Free oferece [200 conexões simultâneas e 2 milhões de men
 ## Fallback futuro no PC do usuário
 
 O ponto de extensão é a configuração `iceServers` em `src/lib/use-room.ts`: adicionar URL e credenciais TURN temporárias obtidas de um endpoint seguro. Um servidor coturn no PC exigirá IP público ou encaminhamento de portas e aprovação explícita para qualquer alteração de firewall/roteador. Se a malha P2P não escalar, uma SFU própria pode substituir a distribuição dos tracks; o protocolo de sala e a interface podem permanecer. Nenhuma porta foi aberta por este projeto.
+
+## Recuperação e diagnóstico (0.3.0)
+
+O transmissor controla a renegociação ICE, mantendo o protocolo offer/answer/ICE/stop. Mensagens aguardam subscription e confirmação de envio; expiram para não reproduzir SDP antigo. CPU é tratada como recurso comum aos espectadores; banda por transporte é tratada individualmente, com teto total opcional. O áudio PCM usa um ring buffer limitado. Consulte [Desempenho](performance.md) para comportamento, métricas e critérios de aceite.

@@ -1,6 +1,8 @@
 "use client";
 
 import { ShieldCheck } from "lucide-react";
+import type { VideoCodec } from "../lib/codec-preference";
+import type { RuntimeMetrics } from "../lib/diagnostic-report";
 import type { MediaHealth, PeerMetrics } from "../lib/rtc-stats";
 import styles from "./connection-diagnostics.module.css";
 
@@ -18,13 +20,18 @@ function value(number: number | null, suffix: string, digits = 0): string {
 }
 
 function tip(item: PeerMetrics): string {
+  if (item.qualityLimitationReason === "cpu") return "A codificação está limitada pelo PC de quem transmite. A qualidade automática pode reduzir a captura para aliviar a carga.";
   if (item.health === "poor" && item.direction === "send") return "Limitado pela conexão com esta pessoa. A qualidade automática pode reduzir só para ela.";
   if (item.health === "degraded" && item.qualityLimitationReason === "bandwidth") return "Limitado pela banda disponível. A imagem pode variar de nitidez.";
   if (item.health === "poor" && item.direction === "receive") return "A conexão com quem está transmitindo está instável no momento.";
   return "";
 }
 
-export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality, onAdaptiveQualityChange }: {
+export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality, onAdaptiveQualityChange, onExport, runtime, codec, onCodecChange }: {
+  codec?: VideoCodec;
+  onCodecChange?: (codec: VideoCodec) => void;
+  runtime?: RuntimeMetrics;
+  onExport?: () => void;
   status: string;
   peers: string[];
   metrics: PeerMetrics[];
@@ -47,7 +54,7 @@ export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality,
     </div>
 
     {onAdaptiveQualityChange && <label className={styles.adaptive}>
-      <span><span>Qualidade automática</span><small>Reduz para quem estiver com rede ruim; a escolha manual é o máximo.</small></span>
+      <span><span>Qualidade automática</span><small>Ajusta rede por pessoa e carga do PC; sua escolha é o máximo.</small></span>
       <input type="checkbox" checked={adaptiveQuality ?? false} onChange={(event) => onAdaptiveQualityChange(event.target.checked)} />
     </label>}
 
@@ -69,8 +76,8 @@ export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality,
           <summary>Ver detalhes técnicos</summary>
           <div className={styles.values}>
             <div><span>Jitter</span><strong>{value(item.jitterMs, "ms")}</strong></div>
-            {item.codec && <div><span>Codec</span><strong>{item.codec}</strong></div>}
-            {item.direction === "send" && <><div><span>Captura</span><strong>{value(item.captureFps, "FPS")}</strong></div><div><span>Codificação</span><strong>{value(item.encodedFps, "FPS")}{item.processingMs !== null ? ` · ${value(item.processingMs, "ms/quadro", 1)}` : ""}</strong></div><div><span>Limitação</span><strong>{limitationText[item.qualityLimitationReason ?? ""] ?? "—"}</strong></div></>}
+            {item.encoderImplementation && <div><span>Codificador</span><strong>{item.encoderImplementation}</strong></div>}{item.codec && <div><span>Codec</span><strong>{item.codec}</strong></div>}
+            {item.direction === "send" && <><div><span>Upload estimado</span><strong>{value(item.availableOutgoingKbps, "kb/s")}</strong></div><div><span>Captura</span><strong>{value(item.captureFps, "FPS")}</strong></div><div><span>Codificação</span><strong>{value(item.encodedFps, "FPS")}{item.processingMs !== null ? ` · ${value(item.processingMs, "ms/quadro", 1)}` : ""}</strong></div><div><span>Limitação</span><strong>{limitationText[item.qualityLimitationReason ?? ""] ?? "—"}</strong></div></>}
             {item.direction === "receive" && <><div><span>Exibição</span><strong>{value(item.renderedFps, "FPS")}</strong></div><div><span>Decodificação</span><strong>{value(item.processingMs, "ms/quadro", 1)}</strong></div></>}
             <div><span>Perda de pacotes</span><strong>{value(item.lossPercent, "%", 1)}</strong></div>
             {item.direction === "receive" && <><div><span>Quadros descartados (2 s)</span><strong>{item.recentDroppedFrames ?? "—"}</strong></div><div><span>Congelamentos (2 s)</span><strong>{item.recentFreezes ?? "—"}</strong></div></>}
@@ -78,6 +85,17 @@ export function ConnectionDiagnostics({ status, peers, metrics, adaptiveQuality,
         </details>
       </div>;
     })}</div> : <p className={styles.empty}>Sem transmissão P2P ativa. As métricas aparecem quando alguém compartilha e outra pessoa assiste.</p>}
+    {onCodecChange && <label className={styles.adaptive}><span>Codec para comparação<small>Automático é o padrão. Confirme o codec efetivo nos detalhes.</small></span><select value={codec ?? "auto"} onChange={(event) => onCodecChange(event.target.value as VideoCodec)}><option value="auto">Automático</option><option value="H264">H.264</option><option value="VP9">VP9</option><option value="VP8">VP8</option></select></label>}
+    {runtime && <div className={styles.values}><div><span>CPU do Lumen</span><strong>{runtime.cpuPercent.toFixed(1)}%</strong></div><div><span>Memória</span><strong>{runtime.memoryMb.toFixed(0)} MB</strong></div>{runtime.audioBufferedMs !== undefined && <div><span>Buffer de áudio</span><strong>{runtime.audioBufferedMs.toFixed(0)} ms</strong></div>}</div>}
+    {onExport && <button type="button" onClick={onExport}>Exportar diagnóstico (últimos 5 minutos)</button>}
     <p className={styles.note}>Sinalização da sala: {status}. RTT mede a conexão entre participantes; quadros descartados e congelamentos dependem dos dados do navegador.</p>
   </div>;
+}
+
+export function EffectiveQuality({ metrics }: { metrics: PeerMetrics[] }) {
+  const sends = metrics.filter((item) => item.direction === "send" && item.width && item.height);
+  if (!sends.length) return null;
+  const heights = sends.map((item) => item.height!);
+  const fps = sends.flatMap((item) => item.encodedFps === null ? [] : [item.encodedFps]);
+  return <small role="status">Enviando: {Math.min(...heights)}p{Math.max(...heights) !== Math.min(...heights) ? `–${Math.max(...heights)}p` : ""}{fps.length ? ` · ${Math.min(...fps)} FPS` : ""} · {sends.length} espectador(es). Valores efetivos.</small>;
 }

@@ -8,6 +8,7 @@ export type DesktopBridge = {
   onAudioError(callback: (message: string) => void): () => void;
   onUpdate(callback: (status: string) => void): () => void;
   checkUpdate(): Promise<void>;
+  getRuntimeMetrics(): Promise<{ cpuPercent: number; memoryMb: number }>;
   getVersion(): Promise<string>;
   openReleases(): Promise<void>;
 };

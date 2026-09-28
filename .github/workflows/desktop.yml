@@ -39,6 +39,10 @@ jobs:
         run: npm ci
       - name: Verify web
         run: npm run lint && npm run typecheck && npm test && npm run build
+      - name: Install test browser
+        run: npx playwright install chromium
+      - name: Verify P2P media with three viewers
+        run: npm run test:e2e
       - name: Install desktop dependencies
         working-directory: apps/desktop
         run: npm ci
@@ -49,6 +53,24 @@ jobs:
         run: |
           cmake -S apps/desktop/native -B apps/desktop/native/build -A x64
           cmake --build apps/desktop/native/build --config Release
+      - name: Verify native helper rejects an invalid window
+        run: |
+          & apps/desktop/native/build/Release/lumen-audio.exe 0
+          if ($LASTEXITCODE -ne 1) { throw "O auxiliar aceitou uma janela inválida." }
+          $global:LASTEXITCODE = 0
+      - name: Package PR preview
+        if: github.event_name == 'pull_request'
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --win dir --publish never
+      - name: Save Desktop preview
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lumen-Desktop-Preview
+          path: apps/desktop/release/win-unpacked
+          retention-days: 7
       - name: Check whether a Desktop release is needed
         if: github.event_name == 'push'
         id: desktop_release

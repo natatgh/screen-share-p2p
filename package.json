@@ -14,7 +14,8 @@
     "test:realtime": "node --env-file=.env.local --import tsx scripts/smoke-supabase.ts",
     "desktop:dev": "npm --prefix apps/desktop run dev",
     "desktop:build": "npm --prefix apps/desktop run build",
-    "desktop:test": "npm --prefix apps/desktop test"
+    "desktop:test": "npm --prefix apps/desktop test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",
@@ -25,6 +26,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -7,7 +7,7 @@ export const initialAdaptation: AdaptationState = { step: 0, bad: 0, good: 0, la
 
 export function effectiveSettings(preferred: StreamSettings, step: AdaptationState["step"]): StreamSettings {
   if (step === 0) return preferred;
-  if (step === 2) return { ...preferred, resolution: 720, frameRate: 15 };
+  if (step === 2) return { ...preferred, resolution: 720, frameRate: Math.min(preferred.frameRate, 15) as 15 };
   if (preferred.resolution === 720 && preferred.frameRate <= 30) return { ...preferred, frameRate: 15 };
   return { ...preferred, resolution: 720, frameRate: Math.min(preferred.frameRate, 30) as 15 | 30 };
 }
@@ -31,7 +31,19 @@ export function nextAdaptation(
     if (ready && count >= 3 && state.step < 2) return { step: (state.step + 1) as 1 | 2, bad: 0, good: 0, lastChange: now };
     return { ...state, bad: count, good: 0 };
   }
+  // Missing samples and static sources are not evidence that a higher level is safe.
+  const healthy = metrics.qualityLimitationReason === "none" && encoded !== null && encoded >= effective.frameRate * 0.8;
+  if (!healthy) return { ...state, bad: 0, good: 0 };
   const count = state.good + 1;
   if (ready && count >= 15 && state.step > 0) return { step: (state.step - 1) as 0 | 1, bad: 0, good: 0, lastChange: now };
   return { ...state, bad: 0, good: count };
+}
+
+/** Physical uplink capacity cannot be inferred by adding or dividing per-peer
+ * bandwidth estimates. Share an explicit user ceiling; otherwise Chromium owns it.
+ */
+export function sharedBitrateBudget(samples: PeerMetrics[], totalMbps?: number): number | undefined {
+  const senders = samples.filter((item) => item.direction === "send" && item.connection === "connected");
+  return totalMbps && Number.isFinite(totalMbps) && totalMbps > 0 && senders.length
+    ? Math.floor(totalMbps * 1_000_000 * 0.8 / senders.length) : undefined;
 }
