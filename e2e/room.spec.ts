@@ -16,6 +16,12 @@ test("one sender reaches three viewers, survives signaling reconnect, changes qu
       pages.push(page);
       page.on("pageerror", (error) => errors.push(error.message));
       await page.addInitScript(() => {
+        const Socket = window.WebSocket;
+        const sockets: WebSocket[] = [];
+        Object.defineProperty(window, "__testSockets", { value: sockets });
+        window.WebSocket = class extends Socket {
+          constructor(url: string | URL, protocols?: string | string[]) { super(url, protocols); sockets.push(this); }
+        };
         const Native = window.RTCPeerConnection;
         const links: RTCPeerConnection[] = [];
         Object.defineProperty(window, "__testPeers", { value: links });
@@ -59,6 +65,10 @@ test("one sender reaches three viewers, survives signaling reconnect, changes qu
     for (const page of pages.slice(1)) await plays(page);
     const viewer = pages[1];
     await viewer.context().setOffline(true);
+    await viewer.evaluate(() => {
+      for (const socket of (window as unknown as { __testSockets: WebSocket[] }).__testSockets) socket.close();
+    });
+    await expect(viewer.getByText("Conectado", { exact: true })).not.toBeVisible();
     await viewer.context().setOffline(false);
     await expect(viewer.getByText("Conectado", { exact: true })).toBeVisible();
     await plays(viewer);
