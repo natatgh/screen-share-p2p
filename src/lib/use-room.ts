@@ -184,7 +184,7 @@ export function useRoom(room: string, options?: RoomOptions) {
         ? await optionsRef.current.capture.start(settingsRef.current)
         : await navigator.mediaDevices.getDisplayMedia(displayCaptureOptions(settingsRef.current));
       if (!stream.getVideoTracks().length) { stream.getTracks().forEach((track) => track.stop()); return; }
-      if (!optionsRef.current?.capture && removeUnscopedWindowAudio(stream)) setSettingsWarning("Áudio de janela isolado está disponível no Lumen Desktop. No navegador, escolha uma aba para som isolado ou um monitor para áudio do sistema.");
+      if (!optionsRef.current?.capture && removeUnscopedWindowAudio(stream)) setSettingsWarning("Este navegador não isolou o áudio desta fonte; o som foi removido para evitar compartilhar o áudio do sistema sem querer.");
       stream.getVideoTracks()[0].contentHint = contentHintForSettings(settingsRef.current);
       globalAdaptation.current = { ...initialAdaptation };
       captureStep.current = 0;
@@ -200,6 +200,24 @@ export function useRoom(room: string, options?: RoomOptions) {
       setError("Não foi possível capturar a tela. Confira a permissão do navegador.");
     }
   }, [startOutbound, stopSharing]);
+
+  // The screen can sleep mid-presentation and kill capture; a wake lock avoids
+  // that. The OS/browser releases it whenever the tab goes hidden, so reacquire
+  // once it is visible again.
+  useEffect(() => {
+    if (!sharing) return;
+    let lock: WakeLockSentinel | null = null;
+    const acquire = async () => {
+      try { lock = (await navigator.wakeLock?.request("screen")) ?? null; } catch { /* Best effort; unsupported or denied. */ }
+    };
+    void acquire();
+    const onVisible = () => { if (document.visibilityState === "visible" && !lock) void acquire(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      void lock?.release();
+    };
+  }, [sharing]);
 
   useEffect(() => {
     self.current = crypto.randomUUID();
@@ -344,7 +362,15 @@ export function useRoom(room: string, options?: RoomOptions) {
     };
     void poll();
     const timer = setInterval(() => void poll(), 2000);
-    return () => { active = false; clearInterval(timer); };
+    // Background-tab timer throttling can leave a dead connection waiting
+    // minutes for its next scheduled retry; resume immediately on return.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      for (const link of outbound.current.values()) link.recovery?.retryNow();
+      void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { active = false; clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [room]);
 
   const exportDiagnostics = useCallback(() => {

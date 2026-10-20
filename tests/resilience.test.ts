@@ -69,6 +69,25 @@ test("successful recovery cancels the next timeout", async (t) => {
   t.mock.timers.tick(100); assert.equal(restarts, 1); recovery.close();
 });
 
+test("retryNow skips an already-throttled wait and retries immediately", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let restarts = 0;
+  const recovery = new PeerRecovery(async () => { restarts++; }, () => assert.fail("unexpected rebuild"), 5, 10_000);
+  recovery.state("disconnected");
+  recovery.retryNow();
+  t.mock.timers.tick(0); await Promise.resolve(); await Promise.resolve();
+  assert.equal(restarts, 1);
+  recovery.close();
+});
+
+test("retryNow is a no-op when there is no pending retry or recovery already closed", () => {
+  const idle = new PeerRecovery(async () => assert.fail("unexpected restart"), () => assert.fail("unexpected rebuild"));
+  idle.retryNow();
+  const closed = new PeerRecovery(async () => assert.fail("unexpected restart"), () => assert.fail("unexpected rebuild"));
+  closed.state("disconnected"); closed.close();
+  closed.retryNow();
+});
+
 test("ICE from old negotiations is rejected while legacy candidates still work", () => {
   const description = { sdp: "v=0\r\na=ice-ufrag:new\r\n" } as RTCSessionDescription;
   assert.equal(candidateMatchesDescription({ usernameFragment: "old" }, description), false);

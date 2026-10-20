@@ -34,11 +34,11 @@ test("changing settings updates the video sender", async () => {
   assert.equal(applied?.degradationPreference, "maintain-framerate");
 });
 
-test("capture offers tab and monitor audio but excludes unscoped window audio", () => {
+test("capture offers tab, monitor, and window-scoped audio", () => {
   const options = displayCaptureOptions(defaultStreamSettings);
   assert.equal(options.audio, true);
   assert.equal(options.systemAudio, "include");
-  assert.equal(options.windowAudio, "exclude");
+  assert.equal(options.windowAudio, "window");
   assert.equal((options.video as MediaTrackConstraints).displaySurface, "window");
 });
 
@@ -64,12 +64,12 @@ test("overlapping sender updates retain order and cap the shared upload budget",
   assert.deepEqual(rates, [1_000_000, 2_000_000]);
 });
 
-test("window capture never retains a potentially system-wide audio track", () => {
+test("unknown display surfaces never retain a potentially system-wide audio track", () => {
   let stopped = false;
   let removed = false;
   const audio = { stop: () => { stopped = true; } } as MediaStreamTrack;
   const stream = {
-    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: "window" }) }],
+    getVideoTracks: () => [{ getSettings: () => ({ displaySurface: undefined }) }],
     getAudioTracks: () => [audio],
     removeTrack: (track: MediaStreamTrack) => { removed = track === audio; },
   } as unknown as MediaStream;
@@ -78,9 +78,9 @@ test("window capture never retains a potentially system-wide audio track", () =>
   assert.equal(removed, true);
 });
 
-test("tab and monitor capture retain the audio authorized in the browser picker", () => {
+test("tab, monitor, and window capture retain the audio authorized in the browser picker", () => {
   let stopped = false;
-  for (const surface of ["browser", "monitor"]) {
+  for (const surface of ["browser", "monitor", "window"]) {
     const stream = {
     getVideoTracks: () => [{ getSettings: () => ({ displaySurface: surface }) }],
     getAudioTracks: () => [{ stop: () => { stopped = true; } }],
