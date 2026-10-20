@@ -36,20 +36,24 @@ export function captureConstraintsForSettings(settings: StreamSettings): MediaTr
   };
 }
 
-type ScopedDisplayMediaOptions = DisplayMediaStreamOptions & { systemAudio: "include"; windowAudio: "exclude" };
+type ScopedDisplayMediaOptions = DisplayMediaStreamOptions & { systemAudio: "include"; windowAudio: "window" };
 
 export function displayCaptureOptions(settings: StreamSettings): ScopedDisplayMediaOptions {
   return {
     video: { ...captureConstraintsForSettings(settings), displaySurface: "window" },
     audio: true,
     systemAudio: "include",
-    windowAudio: "exclude",
+    windowAudio: "window",
   };
 }
 
+// Chrome/Edge 141+ scope window audio to the selected window when windowAudio
+// is "window"; browsers that ignore the hint return no audio track at all, so
+// there is nothing system-wide left to strip. Keep this as a safety net only
+// for surfaces the browser reports outside the known set.
 export function removeUnscopedWindowAudio(stream: MediaStream): boolean {
   const surface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
-  if (surface === "browser" || surface === "monitor") return false;
+  if (surface === "browser" || surface === "monitor" || surface === "window") return false;
   for (const track of stream.getAudioTracks()) {
     track.stop();
     stream.removeTrack(track);

@@ -14,6 +14,13 @@ export class PeerRecovery {
   }
   negotiating() { if (!this.closed && !this.connected && !this.timer) this.schedule(this.attemptTimeout); }
   close() { this.closed = true; clearTimeout(this.timer); }
+  /** Background-tab timer throttling can delay a scheduled retry by minutes; call this once the tab is visible again. */
+  retryNow() {
+    if (this.closed || this.connected || !this.timer) return;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.schedule(0);
+  }
   private schedule(delay: number) {
     this.timer = setTimeout(async () => {
       this.timer = undefined;
