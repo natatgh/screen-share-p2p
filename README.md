@@ -1,6 +1,6 @@
 # Lumen — compartilhamento de tela P2P
 
-MVP de salas temporárias para compartilhar tela, janela ou monitor pelo navegador. Qualquer participante pode transmitir; os demais podem assistir. Sem conta, sem gravação, sem LiveKit ou coturn.
+MVP de salas temporárias para compartilhar tela, janela ou monitor pelo navegador. Qualquer participante pode transmitir; os demais podem assistir. Sem conta, sem gravação, sem SFU — a mídia continua sempre P2P entre participantes (ver [decisões técnicas](docs/decisions.md)).
 
 O **Lumen Desktop para Windows 11** fica em `apps/desktop`. Ele entra nas mesmas salas para assistir ou transmitir, sem iniciar captura ao entrar. A transmissão pode incluir vídeo de uma janela ou monitor áudio do processo do aplicativo para janelas e áudio do sistema para monitores (excluindo o Lumen). Espectadores também podem usar a página web. Veja [as instruções do desktop](apps/desktop/README.md).
 
@@ -60,6 +60,6 @@ O Lumen enviou uma candidatura ao programa gratuito para projetos open source da
 ## Limitações do MVP
 
 - WebRTC em malha: cada transmissor envia uma cópia por espectador. Recomendado para grupos pequenos.
-- STUN público pode falhar em NAT simétrico ou redes restritas; TURN futuro resolverá parte desses casos.
+- STUN público pode falhar em NAT simétrico ou redes restritas; um TURN gerenciado (Cloudflare Realtime, opcional — ver ADR 010) cobre parte desses casos quando configurado.
 - Áudio do sistema depende do navegador e do sistema operacional.
 - Não há autenticação, moderação, criptografia ponta a ponta adicional, persistência ou gravação. WebRTC cifra a mídia em trânsito.

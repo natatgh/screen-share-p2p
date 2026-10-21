@@ -17,4 +17,5 @@ declare global {
   interface Window { lumenDesktop: DesktopBridge }
   const __SUPABASE_URL__: string;
   const __SUPABASE_KEY__: string;
+  const __APP_URL__: string;
 }
