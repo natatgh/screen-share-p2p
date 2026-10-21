@@ -111,6 +111,7 @@ h1,h2,h3{font-family:var(--font-display-family);margin:0}
 .sidebar-section>p{margin:0 0 18px;font-size:14px;line-height:1.5;color:var(--muted-2)}
 .copy-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:46px;border-radius:11px;background:var(--accent);color:var(--accent-ink);font-size:14px;font-weight:600}
 .copy-button:hover{background:#FFD684}
+.copy-button ~ .copy-button{margin-top:10px}
 .copy-error{display:block;margin-top:8px;color:var(--live);font-size:13px}
 .invite-outline{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;margin-top:10px;border-radius:11px;border:1px dashed #3A3C45;color:var(--text);font-size:14px}
 .invite-outline:hover{background:var(--panel-raised)}
