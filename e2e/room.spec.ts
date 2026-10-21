@@ -109,3 +109,19 @@ test("one sender reaches three viewers, survives signaling reconnect, changes qu
     expect(errors).toEqual([]);
   } finally { await Promise.all(pages.map((page) => page.context().close())); }
 });
+
+test("a second tab in the same browser yields, and reloading the first tab is not mistaken for a duplicate", async ({ browser }) => {
+  const context = await browser.newContext();
+  try {
+    const url = "http://localhost:3330/room/BCDE2345";
+    const first = await context.newPage();
+    await first.goto(url);
+    await expect(first.getByText("Conectado", { exact: true })).toBeVisible();
+    const second = await context.newPage();
+    await second.goto(url);
+    await expect(second.getByRole("heading", { name: "Sala já aberta em outra aba" })).toBeVisible({ timeout: 10_000 });
+    await first.reload();
+    await expect(first.getByText("Conectado", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(first.getByRole("heading", { name: "Sala já aberta em outra aba" })).toHaveCount(0);
+  } finally { await context.close(); }
+});
