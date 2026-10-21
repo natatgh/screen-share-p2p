@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     define: {
       __SUPABASE_URL__: JSON.stringify(rootEnv.NEXT_PUBLIC_SUPABASE_URL || ""),
       __SUPABASE_KEY__: JSON.stringify(rootEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || ""),
+      __APP_URL__: JSON.stringify(rootEnv.NEXT_PUBLIC_APP_URL || ""),
     },
   };
 });

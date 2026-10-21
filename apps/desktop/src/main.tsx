@@ -198,6 +198,7 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
     capture,
     runtimeMetrics: async () => { audioNode.current?.port.postMessage({ type: "stats" }); return { ...await window.lumenDesktop.getRuntimeMetrics(), ...(audioNode.current ? audioStats.current : {}) }; },
     signaling: { url: __SUPABASE_URL__, key: __SUPABASE_KEY__, localHost: "localhost", production: import.meta.env.PROD },
+    turnBaseUrl: __APP_URL__,
   });
   const [starting, setStarting] = useState(false);
   const [shareModal, setShareModal] = useState(false);

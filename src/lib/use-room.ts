@@ -9,17 +9,19 @@ import { applyScreenSettings, captureConstraintsForSettings, contentHintForSetti
 import { DiagnosticReport, playbackFps, type RuntimeMetrics } from "./diagnostic-report";
 import { preferVideoCodec } from "./codec-preference";
 import { PeerRecovery, candidateMatchesDescription } from "./peer-recovery";
+import { fetchIceServers } from "./turn-credentials";
 
-const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+const STUN_ONLY: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[]; recovery?: PeerRecovery; renegotiate?: () => Promise<void> };
 type Remote = { id: string; stream: MediaStream };
 export type RoomCapture = { start: (settings: StreamSettings) => Promise<MediaStream>; stop?: () => void };
-export type RoomOptions = { capture?: RoomCapture; signaling?: SignalingConfig; runtimeMetrics?: () => Promise<RuntimeMetrics> };
+export type RoomOptions = { capture?: RoomCapture; signaling?: SignalingConfig; runtimeMetrics?: () => Promise<RuntimeMetrics>; turnBaseUrl?: string };
 
 export function useRoom(room: string, options?: RoomOptions) {
   const optionsRef = useRef(options);
   useEffect(() => { optionsRef.current = options; }, [options]);
   const self = useRef<string>("");
+  const iceServersRef = useRef<RTCIceServer[]>(STUN_ONLY);
   const signaling = useRef<Signaling | null>(null);
   const local = useRef<MediaStream | null>(null);
   const outbound = useRef(new Map<string, Link>());
@@ -66,7 +68,7 @@ export function useRoom(room: string, options?: RoomOptions) {
 
   const startOutbound = useCallback(async function startLink(id: string, stream: MediaStream) {
     if (outbound.current.has(id)) return;
-    const pc = new RTCPeerConnection({ iceServers });
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
     const link: Link = { pc, pending: [] };
     outbound.current.set(id, link);
     adaptation.current.set(id, { ...initialAdaptation });
@@ -222,6 +224,7 @@ export function useRoom(room: string, options?: RoomOptions) {
   useEffect(() => {
     self.current = crypto.randomUUID();
     report.current.reset();
+    void fetchIceServers(optionsRef.current?.turnBaseUrl).then((servers) => { iceServersRef.current = servers; });
     const currentOutbound = outbound.current;
     const currentInbound = inbound.current;
     const currentAdaptation = adaptation.current;
@@ -247,7 +250,7 @@ export function useRoom(room: string, options?: RoomOptions) {
         if (signal.kind === "stop" && signal.owner === signal.from) { closeInbound(signal.from); return; }
         if (signal.kind === "offer" && signal.owner === signal.from && signal.data) {
           const existing = currentInbound.get(signal.from);
-          const pc = existing?.pc ?? new RTCPeerConnection({ iceServers });
+          const pc = existing?.pc ?? new RTCPeerConnection({ iceServers: iceServersRef.current });
           const link: Link = existing ?? { pc, pending: [] };
           currentInbound.set(signal.from, link);
           let answered = false;
