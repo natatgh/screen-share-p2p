@@ -21,7 +21,7 @@ async function run() {
   await channel.track({ online: true });
   let present!: () => void;
   const presence = new Promise<void>((resolve) => { present = resolve; });
-  alice = connectRoom(room, "alice", "alice-browser", { onStatus() {}, onSignal() {}, onPeers: (peers) => { if (peers.some((peer) => peer.id === "bob")) present(); } }, { url, key, production: true });
+  alice = connectRoom(room, "alice", { onStatus() {}, onSignal() {}, onPeers: (peers) => { if (peers.includes("bob")) present(); } }, { url, key, production: true });
   // Exercise the real adapter's bounded pre-subscription queue and server ACK.
   if (!await alice.send({ from: "alice", to: "bob", owner: "alice", kind: "offer", data: { type: "offer", sdp: "smoke" } })) throw new Error("Broadcast não foi confirmado.");
   await Promise.all([broadcast, presence]);
