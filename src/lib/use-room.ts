@@ -10,8 +10,8 @@ import { DiagnosticReport, playbackFps, type RuntimeMetrics } from "./diagnostic
 import { preferVideoCodec } from "./codec-preference";
 import { PeerRecovery, candidateMatchesDescription } from "./peer-recovery";
 import { fetchIceServers } from "./turn-credentials";
-import { getBrowserId } from "./browser-id";
-import { isDuplicateTab, isLockedOut } from "./room-policy";
+import { acquireRoomLock } from "./room-lock";
+import { isLockedOut } from "./room-policy";
 
 const STUN_ONLY: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[]; recovery?: PeerRecovery; renegotiate?: () => Promise<void> };
@@ -23,7 +23,6 @@ export function useRoom(room: string, options?: RoomOptions) {
   const optionsRef = useRef(options);
   useEffect(() => { optionsRef.current = options; }, [options]);
   const self = useRef<string>("");
-  const browserId = useRef<string>("");
   const ownerRef = useRef(false);
   const firstSync = useRef(true);
   const iceServersRef = useRef<RTCIceServer[]>(STUN_ONLY);
@@ -233,7 +232,6 @@ export function useRoom(room: string, options?: RoomOptions) {
 
   useEffect(() => {
     self.current = crypto.randomUUID();
-    browserId.current = getBrowserId();
     firstSync.current = true;
     setOwner(false); setRoomLocked(false); setLockedOut(false); setKicked(false); setDuplicateTab(false);
     report.current.reset();
@@ -241,89 +239,94 @@ export function useRoom(room: string, options?: RoomOptions) {
     const currentOutbound = outbound.current;
     const currentInbound = inbound.current;
     const currentAdaptation = adaptation.current;
-    signaling.current = connectRoom(room, self.current, browserId.current, {
-      onStatus: (value) => { statusRef.current = value; setStatus(value); },
-      onPeers: (peerInfos, info) => {
-        ownerRef.current = info.owner;
-        setOwner(info.owner);
-        setRoomLocked(info.locked);
-        if (isDuplicateTab(peerInfos, browserId.current, info.selfJoinedAt)) {
-          setDuplicateTab(true);
-          signaling.current?.close();
-          return;
-        }
-        if (firstSync.current && isLockedOut(info.locked, info.owner)) {
+    let cancelled = false;
+    let releaseLock = () => {};
+    const connect = () => {
+      signaling.current = connectRoom(room, self.current, {
+        onStatus: (value) => { statusRef.current = value; setStatus(value); },
+        onPeers: (ids, info) => {
+          ownerRef.current = info.owner;
+          setOwner(info.owner);
+          setRoomLocked(info.locked);
+          if (firstSync.current && isLockedOut(info.locked, info.owner)) {
+            firstSync.current = false;
+            setLockedOut(true);
+            signaling.current?.close();
+            return;
+          }
           firstSync.current = false;
-          setLockedOut(true);
-          signaling.current?.close();
-          return;
-        }
-        firstSync.current = false;
-        const ids = peerInfos.map((peer) => peer.id);
-        peersRef.current = ids;
-        setPeers(ids);
-        for (const id of [...currentOutbound.keys()]) if (!ids.includes(id)) closeOutbound(id, false);
-        for (const id of [...currentInbound.keys()]) if (!ids.includes(id)) closeInbound(id);
-        if (local.current) for (const id of ids) void startOutbound(id, local.current);
-      },
-      onSignal: async (signal) => {
-        if (signal.kind === "kick") {
-          setKicked(true);
-          stopSharing();
-          for (const id of [...currentInbound.keys()]) closeInbound(id);
-          signaling.current?.close();
-          return;
-        }
-        if (signal.owner === self.current && signal.kind === "answer") {
-          const link = currentOutbound.get(signal.from);
-          if (!link || !signal.data) return;
-          try {
-            await link.pc.setRemoteDescription(signal.data as RTCSessionDescriptionInit);
-            for (const candidate of link.pending.splice(0)) if (candidateMatchesDescription(candidate, link.pc.remoteDescription)) await link.pc.addIceCandidate(candidate);
-          } catch { setError("Falha ao negociar a conexão P2P."); }
-          return;
-        }
-        if (signal.kind === "stop" && signal.owner === signal.from) { closeInbound(signal.from); return; }
-        if (signal.kind === "offer" && signal.owner === signal.from && signal.data) {
-          const existing = currentInbound.get(signal.from);
-          const pc = existing?.pc ?? new RTCPeerConnection({ iceServers: iceServersRef.current });
-          const link: Link = existing ?? { pc, pending: [] };
-          currentInbound.set(signal.from, link);
-          let answered = false;
-          const earlyIce: RTCIceCandidateInit[] = [];
-          pc.onicecandidate = (event) => {
-            if (!event.candidate) return;
-            const candidate = event.candidate.toJSON();
-            if (answered) send(signal.from, signal.from, "ice", candidate); else earlyIce.push(candidate);
-          };
-          pc.ontrack = (event) => {
-            const stream = event.streams[0] || new MediaStream([event.track]);
-            setRemotes((current) => [...current.filter((remote) => remote.id !== signal.from), { id: signal.from, stream }]);
-          };
-          pc.onconnectionstatechange = () => {
-            if (pc.connectionState === "failed") setError("Reconectando a transmissão. Aguardando quem está transmitindo…");
-            if (pc.connectionState === "connected") setError("");
-          };
-          try {
-            await pc.setRemoteDescription(signal.data as RTCSessionDescriptionInit);
-            await pc.setLocalDescription(await pc.createAnswer());
-            if (!await send(signal.from, signal.from, "answer", pc.localDescription?.toJSON())) throw new Error("Signal unavailable");
-            answered = true;
-            for (const candidate of earlyIce) send(signal.from, signal.from, "ice", candidate);
-            for (const candidate of link.pending.splice(0)) if (candidateMatchesDescription(candidate, pc.remoteDescription)) await pc.addIceCandidate(candidate);
-          } catch { closeInbound(signal.from); setError("Falha ao receber a transmissão."); }
-          return;
-        }
-        if (signal.kind === "ice" && signal.data) {
-          const link = signal.owner === self.current ? currentOutbound.get(signal.from) : currentInbound.get(signal.from);
-          if (!link) return;
-          const candidate = signal.data as RTCIceCandidateInit;
-          if (link.pc.remoteDescription) { if (candidateMatchesDescription(candidate, link.pc.remoteDescription)) void link.pc.addIceCandidate(candidate).catch(() => {}); }
-          else link.pending.push(candidate);
-        }
-      },
-    }, optionsRef.current?.signaling);
+          peersRef.current = ids;
+          setPeers(ids);
+          for (const id of [...currentOutbound.keys()]) if (!ids.includes(id)) closeOutbound(id, false);
+          for (const id of [...currentInbound.keys()]) if (!ids.includes(id)) closeInbound(id);
+          if (local.current) for (const id of ids) void startOutbound(id, local.current);
+        },
+        onSignal: async (signal) => {
+          if (signal.kind === "kick") {
+            setKicked(true);
+            stopSharing();
+            for (const id of [...currentInbound.keys()]) closeInbound(id);
+            signaling.current?.close();
+            return;
+          }
+          if (signal.owner === self.current && signal.kind === "answer") {
+            const link = currentOutbound.get(signal.from);
+            if (!link || !signal.data) return;
+            try {
+              await link.pc.setRemoteDescription(signal.data as RTCSessionDescriptionInit);
+              for (const candidate of link.pending.splice(0)) if (candidateMatchesDescription(candidate, link.pc.remoteDescription)) await link.pc.addIceCandidate(candidate);
+            } catch { setError("Falha ao negociar a conexão P2P."); }
+            return;
+          }
+          if (signal.kind === "stop" && signal.owner === signal.from) { closeInbound(signal.from); return; }
+          if (signal.kind === "offer" && signal.owner === signal.from && signal.data) {
+            const existing = currentInbound.get(signal.from);
+            const pc = existing?.pc ?? new RTCPeerConnection({ iceServers: iceServersRef.current });
+            const link: Link = existing ?? { pc, pending: [] };
+            currentInbound.set(signal.from, link);
+            let answered = false;
+            const earlyIce: RTCIceCandidateInit[] = [];
+            pc.onicecandidate = (event) => {
+              if (!event.candidate) return;
+              const candidate = event.candidate.toJSON();
+              if (answered) send(signal.from, signal.from, "ice", candidate); else earlyIce.push(candidate);
+            };
+            pc.ontrack = (event) => {
+              const stream = event.streams[0] || new MediaStream([event.track]);
+              setRemotes((current) => [...current.filter((remote) => remote.id !== signal.from), { id: signal.from, stream }]);
+            };
+            pc.onconnectionstatechange = () => {
+              if (pc.connectionState === "failed") setError("Reconectando a transmissão. Aguardando quem está transmitindo…");
+              if (pc.connectionState === "connected") setError("");
+            };
+            try {
+              await pc.setRemoteDescription(signal.data as RTCSessionDescriptionInit);
+              await pc.setLocalDescription(await pc.createAnswer());
+              if (!await send(signal.from, signal.from, "answer", pc.localDescription?.toJSON())) throw new Error("Signal unavailable");
+              answered = true;
+              for (const candidate of earlyIce) send(signal.from, signal.from, "ice", candidate);
+              for (const candidate of link.pending.splice(0)) if (candidateMatchesDescription(candidate, pc.remoteDescription)) await pc.addIceCandidate(candidate);
+            } catch { closeInbound(signal.from); setError("Falha ao receber a transmissão."); }
+            return;
+          }
+          if (signal.kind === "ice" && signal.data) {
+            const link = signal.owner === self.current ? currentOutbound.get(signal.from) : currentInbound.get(signal.from);
+            if (!link) return;
+            const candidate = signal.data as RTCIceCandidateInit;
+            if (link.pc.remoteDescription) { if (candidateMatchesDescription(candidate, link.pc.remoteDescription)) void link.pc.addIceCandidate(candidate).catch(() => {}); }
+            else link.pending.push(candidate);
+          }
+        },
+      }, optionsRef.current?.signaling);
+    };
+    void acquireRoomLock(room).then((lock) => {
+      if (cancelled) { lock.release(); return; }
+      releaseLock = lock.release;
+      if (lock.acquired) connect(); else setDuplicateTab(true);
+    });
     return () => {
+      cancelled = true;
+      releaseLock();
       signaling.current?.close();
       for (const link of currentOutbound.values()) { link.recovery?.close(); link.pc.close(); }
       for (const link of currentInbound.values()) link.pc.close();

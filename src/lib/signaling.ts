@@ -1,7 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 
 import { SignalQueue } from "./signal-queue";
-import type { PeerInfo } from "./room-policy";
 
 let sharedClient: SupabaseClient | null = null;
 let sharedClientConfig = "";
@@ -14,7 +13,7 @@ export type Signal = {
   data?: RTCSessionDescriptionInit | RTCIceCandidateInit;
 };
 
-export type RoomInfo = { owner: boolean; locked: boolean; selfJoinedAt: number };
+export type RoomInfo = { owner: boolean; locked: boolean };
 
 export type Signaling = {
   send(signal: Signal): Promise<boolean>;
@@ -23,14 +22,14 @@ export type Signaling = {
 };
 
 type Callbacks = {
-  onPeers: (peers: PeerInfo[], info: RoomInfo) => void;
+  onPeers: (ids: string[], info: RoomInfo) => void;
   onSignal: (signal: Signal) => void;
   onStatus: (status: string) => void;
 };
 
 export type SignalingConfig = { url?: string; key?: string; localHost?: string; localPort?: string; production?: boolean };
 
-export function connectRoom(room: string, self: string, browserId: string, callbacks: Callbacks, config: SignalingConfig = {
+export function connectRoom(room: string, self: string, callbacks: Callbacks, config: SignalingConfig = {
   url: process.env.NEXT_PUBLIC_SUPABASE_URL,
   key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   localHost: process.env.NEXT_PUBLIC_LOCAL_SIGNAL_HOST,
@@ -38,15 +37,15 @@ export function connectRoom(room: string, self: string, browserId: string, callb
   production: process.env.NODE_ENV === "production",
 }): Signaling {
   const { url, key } = config;
-  if (url && key) return connectSupabase(room, self, browserId, url, key, callbacks);
+  if (url && key) return connectSupabase(room, self, url, key, callbacks);
   if (config.production) {
     callbacks.onStatus("Configure o Supabase Realtime para usar salas no deploy.");
     return { send: async () => false, setLocked() {}, close() {} };
   }
-  return connectLocal(room, self, browserId, callbacks, config.localHost, config.localPort);
+  return connectLocal(room, self, callbacks, config.localHost, config.localPort);
 }
 
-function connectLocal(room: string, self: string, browserId: string, cb: Callbacks, localHost?: string, localPort = "3001"): Signaling {
+function connectLocal(room: string, self: string, cb: Callbacks, localHost?: string, localPort = "3001"): Signaling {
   let socket: WebSocket | null = null;
   let closed = false;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -59,7 +58,7 @@ function connectLocal(room: string, self: string, browserId: string, cb: Callbac
   const open = () => {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const host = localHost || location.hostname;
-    socket = new WebSocket(`${protocol}//${host}:${localPort}/?room=${room}&id=${self}&browserId=${browserId}`);
+    socket = new WebSocket(`${protocol}//${host}:${localPort}/?room=${room}&id=${self}`);
     cb.onStatus("Conectando à sala…");
     socket.onopen = () => {
       queue.setReady(true);
@@ -70,14 +69,8 @@ function connectLocal(room: string, self: string, browserId: string, cb: Callbac
       try {
         const message = JSON.parse(event.data);
         if (message.type === "peers") {
-          const all: { id: string; browserId?: string }[] = message.ids;
-          const indexed = all.map((entry, index) => ({ id: entry.id, browserId: entry.browserId, joinedAt: index }));
-          const selfIndex = indexed.findIndex((entry) => entry.id === self);
-          cb.onPeers(indexed.filter((entry) => entry.id !== self), {
-            owner: selfIndex === 0,
-            locked: Boolean(message.locked),
-            selfJoinedAt: selfIndex === -1 ? 0 : selfIndex,
-          });
+          const all: string[] = message.ids;
+          cb.onPeers(all.filter((id) => id !== self), { owner: all[0] === self, locked: Boolean(message.locked) });
         }
         if (message.type === "signal" && message.signal.to === self) cb.onSignal(message.signal);
       } catch { cb.onStatus("Mensagem de sinalização inválida."); }
@@ -97,7 +90,7 @@ function connectLocal(room: string, self: string, browserId: string, cb: Callbac
   };
 }
 
-function connectSupabase(room: string, self: string, browserId: string, url: string, key: string, cb: Callbacks): Signaling {
+function connectSupabase(room: string, self: string, url: string, key: string, cb: Callbacks): Signaling {
   const config = `${url}:${key}`;
   if (!sharedClient || sharedClientConfig !== config) {
     sharedClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -113,16 +106,12 @@ function connectSupabase(room: string, self: string, browserId: string, url: str
   let selfJoinedAt = 0;
   let lockedState = false;
   channel.on("presence", { event: "sync" }, () => {
-    const state = channel.presenceState() as Record<string, { joinedAt?: number; browserId?: string; locked?: boolean }[]>;
+    const state = channel.presenceState() as Record<string, { joinedAt?: number; locked?: boolean }[]>;
     const entries = Object.entries(state)
-      .map(([id, metas]) => ({ id, joinedAt: metas[0]?.joinedAt ?? Infinity, browserId: metas[0]?.browserId, locked: Boolean(metas[0]?.locked) }))
+      .map(([id, metas]) => ({ id, joinedAt: metas[0]?.joinedAt ?? Infinity, locked: Boolean(metas[0]?.locked) }))
       .sort((a, b) => a.joinedAt - b.joinedAt);
     const owner = entries[0]?.id === self;
-    cb.onPeers(entries.filter((entry) => entry.id !== self).map(({ id, joinedAt, browserId: peerBrowserId }) => ({ id, joinedAt, browserId: peerBrowserId })), {
-      owner,
-      locked: entries[0]?.locked ?? false,
-      selfJoinedAt,
-    });
+    cb.onPeers(entries.filter((entry) => entry.id !== self).map((entry) => entry.id), { owner, locked: entries[0]?.locked ?? false });
   });
   channel.on("broadcast", { event: "signal" }, ({ payload }) => {
     if (payload?.to === self) cb.onSignal(payload as Signal);
@@ -133,14 +122,14 @@ function connectSupabase(room: string, self: string, browserId: string, url: str
     if (status === "SUBSCRIBED") {
       cb.onStatus("Conectado");
       selfJoinedAt = selfJoinedAt || Date.now();
-      if (await channel.track({ joinedAt: selfJoinedAt, browserId, locked: lockedState }) !== "ok" && !closed) cb.onStatus("Falha ao publicar presença. Tentando reconectar…");
+      if (await channel.track({ joinedAt: selfJoinedAt, locked: lockedState }) !== "ok" && !closed) cb.onStatus("Falha ao publicar presença. Tentando reconectar…");
     } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
       cb.onStatus("Falha na sinalização. Tentando reconectar…");
     }
   });
   return {
     send: (signal) => queue.send(signal),
-    setLocked: (locked) => { lockedState = locked; void channel.track({ joinedAt: selfJoinedAt, browserId, locked }); },
+    setLocked: (locked) => { lockedState = locked; void channel.track({ joinedAt: selfJoinedAt, locked }); },
     close: () => { closed = true; queue.close(); void client.removeChannel(channel); },
   };
 }
