@@ -10,6 +10,8 @@ import { DiagnosticReport, playbackFps, type RuntimeMetrics } from "./diagnostic
 import { preferVideoCodec } from "./codec-preference";
 import { PeerRecovery, candidateMatchesDescription } from "./peer-recovery";
 import { fetchIceServers } from "./turn-credentials";
+import { getBrowserId } from "./browser-id";
+import { isDuplicateTab, isLockedOut } from "./room-policy";
 
 const STUN_ONLY: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[]; recovery?: PeerRecovery; renegotiate?: () => Promise<void> };
@@ -21,6 +23,9 @@ export function useRoom(room: string, options?: RoomOptions) {
   const optionsRef = useRef(options);
   useEffect(() => { optionsRef.current = options; }, [options]);
   const self = useRef<string>("");
+  const browserId = useRef<string>("");
+  const ownerRef = useRef(false);
+  const firstSync = useRef(true);
   const iceServersRef = useRef<RTCIceServer[]>(STUN_ONLY);
   const signaling = useRef<Signaling | null>(null);
   const local = useRef<MediaStream | null>(null);
@@ -43,6 +48,11 @@ export function useRoom(room: string, options?: RoomOptions) {
   const [settingsWarning, setSettingsWarning] = useState("");
   const [status, setStatus] = useState("Conectando…");
   const [error, setError] = useState("");
+  const [owner, setOwner] = useState(false);
+  const [roomLocked, setRoomLocked] = useState(false);
+  const [lockedOut, setLockedOut] = useState(false);
+  const [kicked, setKicked] = useState(false);
+  const [duplicateTab, setDuplicateTab] = useState(false);
   const [runtime, setRuntime] = useState<RuntimeMetrics | undefined>();
   const [metrics, setMetrics] = useState<PeerMetrics[]>([]);
 
@@ -223,14 +233,33 @@ export function useRoom(room: string, options?: RoomOptions) {
 
   useEffect(() => {
     self.current = crypto.randomUUID();
+    browserId.current = getBrowserId();
+    firstSync.current = true;
+    setOwner(false); setRoomLocked(false); setLockedOut(false); setKicked(false); setDuplicateTab(false);
     report.current.reset();
     void fetchIceServers(optionsRef.current?.turnBaseUrl).then((servers) => { iceServersRef.current = servers; });
     const currentOutbound = outbound.current;
     const currentInbound = inbound.current;
     const currentAdaptation = adaptation.current;
-    signaling.current = connectRoom(room, self.current, {
+    signaling.current = connectRoom(room, self.current, browserId.current, {
       onStatus: (value) => { statusRef.current = value; setStatus(value); },
-      onPeers: (ids) => {
+      onPeers: (peerInfos, info) => {
+        ownerRef.current = info.owner;
+        setOwner(info.owner);
+        setRoomLocked(info.locked);
+        if (isDuplicateTab(peerInfos, browserId.current, info.selfJoinedAt)) {
+          setDuplicateTab(true);
+          signaling.current?.close();
+          return;
+        }
+        if (firstSync.current && isLockedOut(info.locked, info.owner)) {
+          firstSync.current = false;
+          setLockedOut(true);
+          signaling.current?.close();
+          return;
+        }
+        firstSync.current = false;
+        const ids = peerInfos.map((peer) => peer.id);
         peersRef.current = ids;
         setPeers(ids);
         for (const id of [...currentOutbound.keys()]) if (!ids.includes(id)) closeOutbound(id, false);
@@ -238,6 +267,13 @@ export function useRoom(room: string, options?: RoomOptions) {
         if (local.current) for (const id of ids) void startOutbound(id, local.current);
       },
       onSignal: async (signal) => {
+        if (signal.kind === "kick") {
+          setKicked(true);
+          stopSharing();
+          for (const id of [...currentInbound.keys()]) closeInbound(id);
+          signaling.current?.close();
+          return;
+        }
         if (signal.owner === self.current && signal.kind === "answer") {
           const link = currentOutbound.get(signal.from);
           if (!link || !signal.data) return;
@@ -297,7 +333,7 @@ export function useRoom(room: string, options?: RoomOptions) {
       local.current = null;
       optionsRef.current?.capture?.stop?.();
     };
-  }, [room, closeInbound, closeOutbound, send, startOutbound]);
+  }, [room, closeInbound, closeOutbound, send, startOutbound, stopSharing]);
 
   useEffect(() => {
     let active = true;
@@ -382,5 +418,19 @@ export function useRoom(room: string, options?: RoomOptions) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
 
-  return { runtime, exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality };
+  const kickPeer = useCallback((id: string) => {
+    if (!ownerRef.current) return;
+    void send(id, self.current, "kick");
+  }, [send]);
+
+  const toggleRoomLock = useCallback((next: boolean) => {
+    if (!ownerRef.current) return;
+    signaling.current?.setLocked(next);
+  }, []);
+
+  return {
+    runtime, exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics,
+    startSharing, stopSharing, setSettings, setAdaptiveQuality,
+    owner, roomLocked, lockedOut, kicked, duplicateTab, kickPeer, toggleRoomLock,
+  };
 }

@@ -39,19 +39,65 @@ test("local signaling publishes presence and relays addressed offers", async () 
     const room = "ABCD2345";
     const a = "11111111-1111-4111-8111-111111111111";
     const b = "22222222-2222-4222-8222-222222222222";
-    const connect = (id: string) => new Promise<WebSocket>((resolve, reject) => {
-      const socket = new WebSocket(`ws://127.0.0.1:${port}/?room=${room}&id=${id}`);
+    const connect = (id: string, browserId: string) => new Promise<WebSocket>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/?room=${room}&id=${id}&browserId=${browserId}`);
       clients.push(socket);
       socket.once("open", () => resolve(socket)); socket.once("error", reject);
     });
-    const first = await connect(a);
+    const first = await connect(a, "browser-a");
     const presence = waitMessage(first, (message) => message.type === "peers" && Array.isArray(message.ids) && message.ids.length === 2);
-    const second = await connect(b);
-    assert.deepEqual((await presence).ids, [a, b]);
+    const second = await connect(b, "browser-b");
+    assert.deepEqual((await presence).ids, [{ id: a, browserId: "browser-a" }, { id: b, browserId: "browser-b" }]);
+    assert.equal((await presence).locked, false);
     const offer = { from: a, to: b, owner: a, kind: "offer", data: { type: "offer", sdp: "test" } };
     const received = waitMessage(second, (message) => message.type === "signal");
     first.send(JSON.stringify({ type: "signal", signal: offer }));
     assert.deepEqual((await received).signal, offer);
+  } finally {
+    for (const client of clients) client.close();
+    server.kill();
+  }
+});
+
+test("only the earliest participant can lock the room, and kick relays like any other signal", async () => {
+  const port = await freePort();
+  const server = spawn(process.execPath, ["--import", "tsx", "scripts/signaling.ts"], {
+    cwd: process.cwd(), env: { ...process.env, SIGNAL_PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  const clients: WebSocket[] = [];
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Server timeout")), 5000);
+      server.stdout.on("data", (data) => { if (data.toString().includes("Local signaling")) { clearTimeout(timer); resolve(); } });
+      server.once("exit", (code) => { clearTimeout(timer); reject(new Error(`Server exited: ${code}`)); });
+    });
+    const room = "LACK2345";
+    const owner = "33333333-3333-4333-8333-333333333333";
+    const guest = "44444444-4444-4444-8444-444444444444";
+    const connect = (id: string, browserId: string) => new Promise<WebSocket>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/?room=${room}&id=${id}&browserId=${browserId}`);
+      clients.push(socket);
+      socket.once("open", () => resolve(socket)); socket.once("error", reject);
+    });
+    const ownerSocket = await connect(owner, "browser-owner");
+    const guestJoined = waitMessage(ownerSocket, (message) => message.type === "peers" && (message.ids as unknown[]).length === 2);
+    const guestSocket = await connect(guest, "browser-guest");
+    await guestJoined;
+
+    // A non-owner's lock request is silently ignored: force a fresh presence
+    // broadcast via a bystander joining, and confirm the room is still unlocked.
+    guestSocket.send(JSON.stringify({ type: "lock", locked: true }));
+    const stillUnlocked = waitMessage(guestSocket, (message) => message.type === "peers" && (message.ids as unknown[]).length === 3);
+    await connect("55555555-5555-4555-8555-555555555555", "browser-bystander");
+    assert.equal((await stillUnlocked).locked, false);
+
+    const locked = waitMessage(guestSocket, (message) => message.type === "peers" && message.locked === true);
+    ownerSocket.send(JSON.stringify({ type: "lock", locked: true }));
+    assert.equal((await locked).locked, true);
+
+    const kicked = waitMessage(guestSocket, (message) => message.type === "signal" && (message.signal as { kind: string }).kind === "kick");
+    ownerSocket.send(JSON.stringify({ type: "signal", signal: { from: owner, to: guest, owner, kind: "kick" } }));
+    assert.equal(((await kicked).signal as { kind: string }).kind, "kick");
   } finally {
     for (const client of clients) client.close();
     server.kill();

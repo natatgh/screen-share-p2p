@@ -2,36 +2,46 @@ import { WebSocketServer, type WebSocket } from "ws";
 
 const port = Number(process.env.SIGNAL_PORT || 3001);
 const server = new WebSocketServer({ port, host: "127.0.0.1" });
-const rooms = new Map<string, Map<string, WebSocket>>();
+type Peer = { socket: WebSocket; browserId: string };
+type Room = { peers: Map<string, Peer>; locked: boolean };
+const rooms = new Map<string, Room>();
 
 server.on("connection", (socket, request) => {
   const url = new URL(request.url || "/", "http://localhost");
   const room = url.searchParams.get("room") || "";
   const id = url.searchParams.get("id") || "";
-  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(room) || !/^[a-f0-9-]{36}$/.test(id)) return socket.close(1008, "Invalid room or ID");
-  const peers = rooms.get(room) || new Map<string, WebSocket>();
-  rooms.set(room, peers);
-  peers.get(id)?.close(1008, "Duplicate ID");
-  peers.set(id, socket);
+  const browserId = url.searchParams.get("browserId") || "";
+  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(room) || !/^[a-f0-9-]{36}$/.test(id) || !browserId) return socket.close(1008, "Invalid room or ID");
+  const state = rooms.get(room) || { peers: new Map<string, Peer>(), locked: false };
+  rooms.set(room, state);
+  state.peers.get(id)?.socket.close(1008, "Duplicate ID");
+  state.peers.set(id, { socket, browserId });
   const presence = () => {
-    const message = JSON.stringify({ type: "peers", ids: [...peers.keys()] });
-    for (const peer of peers.values()) if (peer.readyState === peer.OPEN) peer.send(message);
+    const ids = [...state.peers.entries()].map(([peerId, peer]) => ({ id: peerId, browserId: peer.browserId }));
+    const message = JSON.stringify({ type: "peers", ids, locked: state.locked });
+    for (const peer of state.peers.values()) if (peer.socket.readyState === peer.socket.OPEN) peer.socket.send(message);
   };
   presence();
   socket.on("message", (raw) => {
     if (Buffer.byteLength(raw.toString()) > 65536) return;
     try {
       const message = JSON.parse(raw.toString());
+      if (message.type === "lock" && typeof message.locked === "boolean") {
+        if ([...state.peers.keys()][0] !== id) return;
+        state.locked = message.locked;
+        presence();
+        return;
+      }
       if (message.type !== "signal" || message.signal?.from !== id || typeof message.signal?.to !== "string") return;
-      if (!["offer", "answer", "ice", "stop"].includes(message.signal.kind)) return;
-      const target = peers.get(message.signal.to);
-      if (target && target.readyState === target.OPEN) target.send(JSON.stringify(message));
+      if (!["offer", "answer", "ice", "stop", "kick"].includes(message.signal.kind)) return;
+      const target = state.peers.get(message.signal.to);
+      if (target && target.socket.readyState === target.socket.OPEN) target.socket.send(JSON.stringify(message));
     } catch { /* Ignore malformed client messages. */ }
   });
   socket.on("close", () => {
-    if (peers.get(id) !== socket) return;
-    peers.delete(id);
-    if (peers.size) presence(); else rooms.delete(room);
+    if (state.peers.get(id)?.socket !== socket) return;
+    state.peers.delete(id);
+    if (state.peers.size) presence(); else rooms.delete(room);
   });
 });
 

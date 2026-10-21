@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, LogOut, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, UsersRound, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Expand, Info, Link2, Lock, LogOut, Maximize2, MicOff, MonitorPlay, Radio, ScreenShare, SlidersHorizontal, Square, Unlock, UserX, UsersRound, Volume2, VolumeX } from "lucide-react";
 import { observePlayback } from "@/lib/diagnostic-report";
 import { useRoom } from "@/lib/use-room";
 import { ConnectionDiagnostics, EffectiveQuality } from "@/components/connection-diagnostics";
@@ -96,8 +96,19 @@ function QualityPanel({ settings, warning, onChange }: { settings: StreamSetting
   </section>;
 }
 
+function RoomBlocked({ title, message }: { title: string; message: string }) {
+  return <main className="room-shell">
+    <div className="empty-stage">
+      <div className="empty-visual"><Info size={28} strokeWidth={1.5} /></div>
+      <h3>{title}</h3>
+      <p>{message}</p>
+      <Link className="empty-invite" href="/"><ArrowLeft size={16} /> Voltar ao início</Link>
+    </div>
+  </main>;
+}
+
 export default function RoomClient({ code }: { code: string }) {
-  const { exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality } = useRoom(code);
+  const { exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality, owner, roomLocked, lockedOut, kicked, duplicateTab, kickPeer, toggleRoomLock } = useRoom(code);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -110,6 +121,10 @@ export default function RoomClient({ code }: { code: string }) {
   ];
   const featured = streams.find((screen) => screen.id === selectedId) ?? streams[0];
   const connected = status === "Conectado";
+
+  if (kicked) return <RoomBlocked title="Você foi removido da sala" message="Quem está apresentando encerrou sua participação nesta sala." />;
+  if (lockedOut) return <RoomBlocked title="Sala trancada" message="Quem está apresentando trancou esta sala para novas entradas." />;
+  if (duplicateTab) return <RoomBlocked title="Sala já aberta em outra aba" message="Esta sala já está aberta em outra aba deste navegador." />;
 
   const copy = async () => {
     try {
@@ -155,10 +170,11 @@ export default function RoomClient({ code }: { code: string }) {
             <p>Envie o link para convidar alguém a assistir ou compartilhar.</p>
             <button className="copy-button" onClick={copy}>{copied ? <Check size={17} /> : <Link2 size={17} />}{copied ? "Link copiado" : "Copiar link da sala"}</button>
             {copyError && <small className="copy-error" role="alert">Não foi possível copiar o link.</small>}
+            {owner && <button className="copy-button" onClick={() => toggleRoomLock(!roomLocked)}>{roomLocked ? <Unlock size={17} /> : <Lock size={17} />}{roomLocked ? "Destrancar sala" : "Trancar sala"}</button>}
           </div>
           <div className="sidebar-panel">
             <div className="participant"><span className="avatar self">V</span><div><strong>Você</strong><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></div>{sharing && <span className="participant-live">AO VIVO</span>}</div>
-            {peers.map((id, index) => <div className="participant" key={id}><span className="avatar">{index + 1}</span><div><strong>Participante {index + 1}</strong><small>{remotes.some((remote) => remote.id === id) ? "Transmitindo agora" : "Na sala"}</small></div>{remotes.some((remote) => remote.id === id) && <span className="participant-live">AO VIVO</span>}</div>)}
+            {peers.map((id, index) => <div className="participant" key={id}><span className="avatar">{index + 1}</span><div><strong>Participante {index + 1}</strong><small>{remotes.some((remote) => remote.id === id) ? "Transmitindo agora" : "Na sala"}</small></div>{remotes.some((remote) => remote.id === id) && <span className="participant-live">AO VIVO</span>}{owner && <button className="icon-button" onClick={() => kickPeer(id)} aria-label="Expulsar participante" title="Expulsar participante"><UserX size={16} /></button>}</div>)}
           </div>
           <div className="sidebar-bottom"><Info size={17} /><span>Sem gravação. A mídia passa diretamente entre os participantes quando a rede permite.</span></div>
         </> : <div className="sidebar-panel">
