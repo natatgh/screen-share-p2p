@@ -1,259 +1,83 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, Check, ChevronDown, Copy, ExternalLink, Lock, Maximize2, MonitorPlay, Radio, RefreshCw, ScreenShare, Settings2, Square, Unlock, UserX, Users, Volume2, VolumeX, X } from "lucide-react";
-import { createRoom, isValidRoom, normalizeRoom } from "../../../src/lib/room";
-import { useRoom, type RoomCapture } from "../../../src/lib/use-room";
-import { ConnectionDiagnostics, EffectiveQuality } from "../../../src/components/connection-diagnostics";
-import type { PeerMetrics } from "../../../src/lib/rtc-stats";
-import type { VideoCodec } from "../../../src/lib/codec-preference";
-import { observePlayback, type RuntimeMetrics } from "../../../src/lib/diagnostic-report";
-import { captureConstraintsForSettings, type StreamFrameRate, type StreamMode, type StreamResolution, type StreamSettings } from "../../../src/lib/stream-quality";
-import type { CaptureSource } from "./types";
-import workletUrl from "./pcm-worklet.js?url";
-import lumenIconUrl from "../assets/lumen-icon.png";
+import "@fontsource/bricolage-grotesque/500.css";
+import "@fontsource/bricolage-grotesque/700.css";
+import "@fontsource/bricolage-grotesque/800.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import { createRoom } from "../../../src/lib/room";
+import { Brand } from "../../../src/components/brand";
+import { EntryCard } from "../../../src/components/entry-card";
+import { RoomView, type HomeLink } from "../../../src/components/room-view";
+import { SourcePicker } from "./source-picker";
+import { UpdateMenu, useUpdateInfo } from "./update-menu";
+import { useDesktopCapture } from "./use-desktop-capture";
+import { useSources } from "./use-sources";
+import "../../../src/app/globals.css";
 import "./style.css";
-import "../../../src/styles/native-controls.css";
 
-function LogoMark() {
-  return <img className="brand-icon" src={lumenIconUrl} alt="" />;
-}
-
-type UpdateKind = "uptodate" | "checking" | "progress" | "ready" | "error";
-
-function updateKind(status: string): UpdateKind {
-  if (!status) return "uptodate";
-  if (/pronta|disponível/i.test(status)) return "ready";
-  if (/baixando|procurando/i.test(status)) return "progress";
-  if (/indisponível|falha|erro/i.test(status)) return "error";
-  return "uptodate";
-}
-
-function UpdateMenu({ version, status, onCheck, onReleases }: { version: string; status: string; onCheck: () => void; onReleases: () => void }) {
-  const [open, setOpen] = useState(false);
-  const kind = updateKind(status);
-  const label = kind === "ready" ? "Atualização pronta" : kind === "progress" ? status || "Verificando…" : `v${version}`;
-  return <div className="update-menu">
-    <button type="button" className={`update-chip ${kind}`} aria-expanded={open} aria-controls="update-popover" onClick={() => setOpen((current) => !current)}>
-      <span className="update-dot" />{label}<ChevronDown size={13} className={open ? "rotated" : ""} />
-    </button>
-    {open && <section id="update-popover" className="update-popover" aria-label="Versão e atualizações" role="dialog">
-      <div className="update-popover-head"><LogoMark /><div><strong>Lumen Desktop</strong><span>v{version}</span></div></div>
-      <p className={`update-status ${kind}`}>{status || "Você está na versão mais recente."}</p>
-      <div className="update-popover-actions">
-        <button onClick={() => { onCheck(); }}><RefreshCw size={14} /> Verificar</button>
-        <button onClick={() => { onReleases(); }}><ExternalLink size={14} /> Notas da versão</button>
-      </div>
-    </section>}
-  </div>;
-}
-
-function TitleBar({ code, status, version, updateStatus, onCheckUpdate, onOpenReleases }: { code?: string; status?: string; version?: string; updateStatus?: string; onCheckUpdate?: () => void; onOpenReleases?: () => void }) {
-  return <header className="topbar" aria-label="Barra da janela">
-    <div className="topbar-safe">
-      <div className="brand"><LogoMark />Lumen<span className="mint">.</span></div>
-      <div className="topbar-right">
-        {code && <><span className="room-code">Sala <b>{code}</b></span><span className={`connection ${status === "Conectado" ? "online" : ""}`}><span />{status}</span></>}
-        {version !== undefined && <UpdateMenu version={version} status={updateStatus ?? ""} onCheck={onCheckUpdate!} onReleases={onOpenReleases!} />}
-      </div>
-    </div>
-  </header>;
-}
-
-function useUpdateInfo() {
-  const [version, setVersion] = useState("");
-  const [updateStatus, setUpdateStatus] = useState("");
-  useEffect(() => {
-    void window.lumenDesktop.getVersion().then(setVersion);
-    return window.lumenDesktop.onUpdate(setUpdateStatus);
-  }, []);
-  return { version, updateStatus };
-}
-
-function DiagnosticsPanel(props: { codec?: VideoCodec; onCodecChange?: (codec: VideoCodec) => void; runtime?: RuntimeMetrics; status: string; peers: string[]; metrics: PeerMetrics[]; adaptiveQuality: boolean; onAdaptiveQualityChange: (enabled: boolean) => void; onExport: () => void }) {
-  const [open, setOpen] = useState(false);
-  return <div className="diagnostics-panel">
-    <button type="button" className="diagnostics-toggle" aria-expanded={open} aria-controls="diagnostics-body" onClick={() => setOpen((current) => !current)}>
-      <span><Activity size={15} /> Diagnóstico</span>
-      <ChevronDown size={14} className={open ? "rotated" : ""} />
-    </button>
-    {open && <div id="diagnostics-body" className="diagnostics-body"><ConnectionDiagnostics {...props} /></div>}
-  </div>;
-}
-
-function useSources() {
-  const [sources, setSources] = useState<CaptureSource[]>([]);
-  const [selected, setSelected] = useState<CaptureSource | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const list = await window.lumenDesktop.listSources();
-      setSources(list);
-      setSelected((current) => list.find((source) => source.id === current?.id) || null);
-      setError("");
-    } catch { setError("Não foi possível listar as janelas."); }
-    finally { setLoading(false); }
-  };
-  const select = async (source: CaptureSource) => {
-    await window.lumenDesktop.selectSource(source.id);
-    setSelected(source);
-  };
-  return { sources, selected, loading, error, refresh, select };
-}
-
-function Preview({ stream, source }: { stream: MediaStream | null; source: CaptureSource | null }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    video.srcObject = stream;
-    return () => { video.srcObject = null; };
-  }, [stream]);
-  return stream
-    ? <video className="preview-video" ref={ref} autoPlay playsInline muted aria-label="Prévia da transmissão" />
-    : source ? <div className="preview-thumbnail"><img src={source.thumbnail} alt={`Prévia de ${source.name}`} /><span>{source.name} · prévia estática</span></div>
-      : <div className="preview-empty"><MonitorPlay size={42} strokeWidth={1.3} /><strong>Prévia da sua transmissão</strong><span>Escolha uma fonte e clique em Entrar ao vivo.</span></div>;
-}
-
-function VideoTile({ stream, label, own = false }: { stream: MediaStream; label: string; own?: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const [playBlocked, setPlayBlocked] = useState(false);
-  useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    video.srcObject = stream;
-    void video.play().then(() => setPlayBlocked(false)).catch(() => setPlayBlocked(true));
-    const stop = observePlayback(video, stream);
-    return () => { stop(); video.srcObject = null; };
-  }, [stream]);
-  return <div className="video-tile"><video ref={ref} autoPlay playsInline muted={own} aria-label={`Transmissão de ${label}`} />
-    <div className="tile-controls"><span><Radio size={13} /> {label}{own ? " · Você" : ""}</span><button title="Tela cheia" aria-label={`Tela cheia: ${label}`} onClick={() => void ref.current?.requestFullscreen()}><Maximize2 size={16} /></button></div>
-    {playBlocked && <button className="play-overlay" onClick={() => void ref.current?.play().then(() => setPlayBlocked(false))}>Clique para assistir com áudio</button>}
-  </div>;
-}
+const INVITE_BASE_URL = "https://screen-share-p2p.vercel.app/room";
 
 function Session({ code, leave }: { code: string; leave: () => void }) {
   const { sources, selected, loading, error: sourceError, refresh, select } = useSources();
   const [includeAudio, setIncludeAudio] = useState(true);
-  const [audioWarning, setAudioWarning] = useState("");
-  const [copied, setCopied] = useState(false);
+  const { capture, runtimeMetrics, audioWarning } = useDesktopCapture(selected, includeAudio);
   const { version, updateStatus } = useUpdateInfo();
-  const audioStats = useRef({ audioBufferedMs: 0, audioDroppedFrames: 0, audioUnderruns: 0 });
-  const audioNode = useRef<AudioWorkletNode | null>(null);
-  const captureRef = useRef<{ context: AudioContext; unsubscribe: () => void } | null>(null);
-  const sourceRef = useRef(selected);
-  const audioRef = useRef(includeAudio);
-  useEffect(() => { sourceRef.current = selected; }, [selected]);
-  useEffect(() => { audioRef.current = includeAudio; }, [includeAudio]);
+  const [settle, setSettle] = useState<((confirmed: boolean) => void) | null>(null);
 
-  useEffect(() => window.lumenDesktop.onAudioError(setAudioWarning), []);
+  const pickSource = () => {
+    void refresh();
+    return new Promise<boolean>((resolve) => setSettle(() => resolve));
+  };
+  const finishPicking = (confirmed: boolean) => { settle?.(confirmed); setSettle(null); };
 
-  const capture = useMemo<RoomCapture>(() => ({
-    start: async (settings: StreamSettings) => {
-      if (!sourceRef.current) throw new Error("Selecione uma janela ou monitor.");
-      setAudioWarning("");
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: captureConstraintsForSettings(settings), audio: false,
-      });
-      if (audioRef.current) {
-        let context: AudioContext | null = null;
-        let unsubscribe: (() => void) | null = null;
-        try {
-          context = new AudioContext();
-          await context.audioWorklet.addModule(workletUrl);
-          const node = new AudioWorkletNode(context, "lumen-pcm", { outputChannelCount: [2] });
-          audioNode.current = node;
-          node.port.onmessage = ({ data }) => { audioStats.current = data; };
-          const destination = context.createMediaStreamDestination();
-          node.connect(destination);
-          unsubscribe = window.lumenDesktop.onAudioChunk((chunk) => {
-            node.port.postMessage(chunk.buffer, [chunk.buffer]);
-          });
-          await context.resume();
-          const result = await window.lumenDesktop.startAppAudio();
-          if (!result.ok) throw new Error(result.error || "Áudio indisponível.");
-          stream.addTrack(destination.stream.getAudioTracks()[0]);
-          captureRef.current = { context, unsubscribe };
-        } catch (cause) {
-          audioNode.current = null;
-          unsubscribe?.();
-          if (context) void context.close();
-          void window.lumenDesktop.stopAppAudio();
-          setAudioWarning(cause instanceof Error ? cause.message : "Áudio indisponível; somente vídeo será transmitido.");
-        }
-      }
-      void window.lumenDesktop.followSource();
-      return stream;
-    },
-    onSourceChange: (listener) => window.lumenDesktop.onCaptureRetarget((sourceId) => listener(async () => {
-      // Legacy desktop constraints: unlike getDisplayMedia they need no click, and this swap comes from the main process.
-      const next = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId } } } as MediaStreamConstraints);
-      return next.getVideoTracks()[0];
-    })),
-    stop: () => {
-      void window.lumenDesktop.unfollowSource();
-      captureRef.current?.unsubscribe();
-      void captureRef.current?.context.close();
-      captureRef.current = null;
-      audioNode.current = null;
-      void window.lumenDesktop.stopAppAudio();
-    },
-  }), []);
+  const homeLink: HomeLink = ({ className, ariaLabel, children }) => <button type="button" className={className} aria-label={ariaLabel} onClick={leave}>{children}</button>;
+  const describeBroadcast = (sharing: boolean) => {
+    if (!sharing) return "Escolha uma janela ou monitor, com o áudio do aplicativo.";
+    if (!includeAudio) return "Sem áudio compartilhado.";
+    return selected?.type === "screen" ? "Áudio do sistema ativo." : "Áudio do aplicativo ativo.";
+  };
 
-  const { runtime, exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality, owner, roomLocked, lockedOut, kicked, duplicateTab, kickPeer, toggleRoomLock } = useRoom(code, {
-    capture,
-    runtimeMetrics: async () => { audioNode.current?.port.postMessage({ type: "stats" }); return { ...await window.lumenDesktop.getRuntimeMetrics(), ...(audioNode.current ? audioStats.current : {}) }; },
-    signaling: { url: __SUPABASE_URL__, key: __SUPABASE_KEY__, localHost: "localhost", production: import.meta.env.PROD },
-    turnBaseUrl: __APP_URL__,
-  });
-  const [starting, setStarting] = useState(false);
-  const [shareModal, setShareModal] = useState(false);
-  useEffect(() => {
-    if (!shareModal) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
-  }, [shareModal]);
-  const start = async () => { setStarting(true); try { await startSharing(); setShareModal(false); } finally { setStarting(false); } };
-  const pick = async (source: CaptureSource) => { if (sharing) stopSharing(); await select(source); };
-  const invite = `https://screen-share-p2p.vercel.app/room/${code}`;
-  const copy = async () => { await navigator.clipboard.writeText(invite); setCopied(true); setTimeout(() => setCopied(false), 2200); };
+  return <>
+    <RoomView
+      code={code}
+      homeLink={homeLink}
+      inviteUrl={`${INVITE_BASE_URL}/${code}`}
+      headerExtra={<UpdateMenu version={version} status={updateStatus} />}
+      options={{
+        capture,
+        runtimeMetrics,
+        signaling: { url: __SUPABASE_URL__, key: __SUPABASE_KEY__, localHost: "localhost", production: import.meta.env.PROD },
+        turnBaseUrl: __APP_URL__,
+      }}
+      pickSource={pickSource}
+      notice={audioWarning}
+      duplicateMessage="Esta sala já está aberta em outra janela do Lumen neste computador."
+      describeBroadcast={describeBroadcast}
+    />
+    {settle && <SourcePicker sources={sources} selected={selected} loading={loading} error={sourceError} includeAudio={includeAudio}
+      onAudioChange={setIncludeAudio} onSelect={(source) => void select(source)} onRefresh={() => void refresh()}
+      onCancel={() => finishPicking(false)} onConfirm={() => finishPicking(true)} />}
+  </>;
+}
 
-  const blocked = kicked ? { title: "Você foi removido da sala", message: "Quem está apresentando encerrou sua participação nesta sala." }
-    : lockedOut ? { title: "Sala trancada", message: "Quem está apresentando trancou esta sala para novas entradas." }
-    : duplicateTab ? { title: "Sala já aberta em outra aba", message: "Esta sala já está aberta em outra janela do Lumen neste computador." } : null;
-  if (blocked) return <div className="app-shell">
-    <TitleBar code={code} status={status} version={version} updateStatus={updateStatus} onCheckUpdate={() => void window.lumenDesktop.checkUpdate()} onOpenReleases={() => void window.lumenDesktop.openReleases()} />
-    <div className="room-empty"><h3>{blocked.title}</h3><p>{blocked.message}</p><button className="secondary" onClick={leave}>Voltar ao início</button></div>
-  </div>;
-
-  return <div className="app-shell">
-    <TitleBar code={code} status={status} version={version} updateStatus={updateStatus} onCheckUpdate={() => void window.lumenDesktop.checkUpdate()} onOpenReleases={() => void window.lumenDesktop.openReleases()} />
-    <main className="content"><aside className="sidebar"><div className="sidebar-top"><span className="eyebrow">SUA SALA</span><h1>{code}</h1><p>Assista às transmissões ou compartilhe sua tela quando quiser.</p></div>
-      <div className="sidebar-section"><div className="section-heading">CONVITE</div><div className="invite-box"><span>{code}</span><button onClick={() => void copy()} title="Copiar link da sala">{copied ? <Check size={17} /> : <Copy size={17} />}</button></div><small>{copied ? "Link copiado" : "Convide pessoas pelo link"}</small>{owner && <button className="secondary" onClick={() => toggleRoomLock(!roomLocked)}>{roomLocked ? <Unlock size={15} /> : <Lock size={15} />}{roomLocked ? "Destrancar sala" : "Trancar sala"}</button>}</div>
-      <div className="sidebar-section"><div className="section-heading people-heading"><span><Users size={14} /> PARTICIPANTES</span><b>{peers.length + 1}</b></div><div className="person"><span className="avatar self">V</span><span><b>Você</b><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></span>{sharing && <Radio size={14} />}</div>{peers.map((peer, index) => <div className="person" key={peer}><span className="avatar">{index + 1}</span><span><b>Participante {index + 1}</b><small>{remotes.some((remote) => remote.id === peer) ? "Transmitindo agora" : "Na sala"}</small></span>{remotes.some((remote) => remote.id === peer) && <Radio size={14} />}{owner && <button className="icon-button" onClick={() => kickPeer(peer)} aria-label="Expulsar participante" title="Expulsar participante"><UserX size={14} /></button>}</div>)}</div>
-      <div className="sidebar-bottom"><button onClick={() => { stopSharing(); leave(); }}>Sair da sala</button></div></aside>
-      <section className="workspace room-workspace"><div className="workspace-title"><div><span className="eyebrow">SALA DE TRANSMISSÃO</span><h2>{remotes.length + (sharing ? 1 : 0) ? "Transmissões ao vivo" : peers.length ? "Pessoas na sala" : "Tudo pronto para assistir"}</h2></div><span className="viewer-count"><Users size={16} /> {peers.length + 1} na sala</span></div><EffectiveQuality metrics={metrics} /><DiagnosticsPanel status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} onExport={exportDiagnostics} runtime={runtime} codec={settings.codec} onCodecChange={sharing ? (codec) => void setSettings({ ...settings, codec }) : undefined} />
-        {remotes.length || (sharing && localStream) ? <div className="stream-grid">{remotes.map((remote) => <VideoTile key={remote.id} stream={remote.stream} label={`Participante ${Math.max(1, peers.indexOf(remote.id) + 1)}`} />)}{sharing && localStream && <VideoTile stream={localStream} label="Sua tela" own />}</div> : peers.length ? <div className="members-area"><div className="member-grid"><div className="member-tile"><span className="member-avatar self">V</span><strong>Você</strong><small>Assistindo</small></div>{peers.map((peer, index) => <div className="member-tile" key={peer}><span className="member-avatar">{index + 1}</span><strong>Participante {index + 1}</strong><small>Na sala</small></div>)}</div><div className="members-cta"><span>Nenhuma transmissão ao vivo ainda. Use &ldquo;Compartilhar tela&rdquo; abaixo para começar.</span></div></div> : <div className="room-empty"><div className="empty-icon"><MonitorPlay size={42} strokeWidth={1.5} /></div><h3>Nenhuma tela compartilhada ainda</h3><p>Use &ldquo;Compartilhar tela&rdquo; abaixo para começar, ou convide mais gente.</p><button className="secondary" onClick={() => void copy()}><Copy size={16} /> {copied ? "Copiado" : "Copiar convite"}</button></div>}
-        {(error || audioWarning || settingsWarning) && <div className="warning" role="status">{error || audioWarning || settingsWarning}</div>}
-        <footer className="actionbar room-actions"><div className="broadcast-hint">{sharing ? <Radio size={16} /> : <ScreenShare size={16} />}<span>{sharing ? "Sua tela está ao vivo." : "Compartilhe sua tela quando quiser."}</span></div><div className="room-buttons">{sharing && <button className="stop" onClick={stopSharing}><Square size={15} fill="currentColor" /> Parar transmissão</button>}<button className="go-live" onClick={() => { setShareModal(true); void refresh(); }}><ScreenShare size={17} />{sharing ? "Alterar transmissão" : "Compartilhar tela"}</button></div></footer>
-      </section></main>
-    {shareModal && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShareModal(false); }}><div className="share-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><div><span className="eyebrow">TRANSMISSÃO</span><h2 id="modal-title">Compartilhar tela</h2><p>Escolha uma janela ou monitor. Você pode continuar apenas assistindo.</p></div><button className="icon-button" title="Fechar" aria-label="Fechar" onClick={() => setShareModal(false)}><X size={20} /></button></div>
-      <div className="modal-body"><div className="source-heading"><strong>Janelas e monitores</strong><button onClick={() => void refresh()} disabled={loading}><RefreshCw size={15} /> Atualizar</button></div>{sourceError && <p className="warning" role="alert">{sourceError}</p>}<div className="sources">{sources.map((source) => <button key={source.id} className={`source ${selected?.id === source.id ? "selected" : ""}`} onClick={() => void pick(source)}><img src={source.thumbnail} alt="" /><span>{source.icon && <img src={source.icon} alt="" />}<b>{source.name}</b></span><small>{source.type === "window" ? "JANELA" : "MONITOR"}</small></button>)}</div>
-        <div className="bottom-grid"><div className="preview"><div className="panel-heading"><MonitorPlay size={17} /> Prévia</div><Preview stream={localStream} source={selected} /></div><div className="settings"><div className="panel-heading"><Settings2 size={17} /> Configurações</div><label className="field">PREFERÊNCIA<select value={settings.mode} onChange={(e) => void setSettings({ ...settings, mode: e.target.value as StreamMode })}><option value="balanced">Equilibrado</option><option value="smooth">Vídeo mais fluido</option><option value="detail">Texto mais nítido</option></select></label><div className="field">RESOLUÇÃO<div className="segments">{([720, 1080, "source"] as StreamResolution[]).map((resolution) => <button key={resolution} className={settings.resolution === resolution ? "selected" : ""} onClick={() => void setSettings({ ...settings, resolution })}>{resolution === "source" ? "Original" : `${resolution}p`}</button>)}</div></div><div className="field">QUADROS POR SEGUNDO<div className="segments">{([15, 30, 60] as StreamFrameRate[]).map((frameRate) => <button key={frameRate} className={settings.frameRate === frameRate ? "selected" : ""} onClick={() => void setSettings({ ...settings, frameRate })}>{frameRate}</button>)}</div></div><label className="field">UPLOAD TOTAL (Mb/s, opcional)<input type="number" min="1" max="1000" placeholder="Automático" value={settings.uploadBudgetMbps ?? ""} onChange={(e) => void setSettings({ ...settings, uploadBudgetMbps: Number(e.target.value) > 0 ? Number(e.target.value) : undefined })} /></label><label className="audio-toggle"><span>{includeAudio ? <Volume2 size={18} /> : <VolumeX size={18} />}<span><b>{selected?.type === "screen" ? "Áudio do sistema" : "Áudio do aplicativo"}</b><small>{selected?.type === "window" ? "Pode incluir outras janelas do mesmo aplicativo." : "Som de todos os aplicativos, exceto o Lumen. Não se limita ao monitor escolhido."}</small></span></span><input type="checkbox" checked={includeAudio} disabled={sharing || !selected} onChange={(e) => setIncludeAudio(e.target.checked)} /></label></div></div></div>
-      <div className="modal-footer"><button className="secondary" onClick={() => setShareModal(false)}>Cancelar</button><button className="go-live" onClick={() => void start()} disabled={!selected || starting || sharing}><ScreenShare size={17} />{starting ? "Iniciando…" : sharing ? "Pare a transmissão para trocar" : "Entrar ao vivo"}</button></div></div></div>}
+function Entry({ enter }: { enter: (code: string) => void }) {
+  const { version, updateStatus } = useUpdateInfo();
+  return <div className="desktop-entry">
+    <header className="desktop-entry-header">
+      <span className="brand"><Brand /></span>
+      <UpdateMenu version={version} status={updateStatus} />
+    </header>
+    <main><EntryCard onCreate={() => enter(createRoom())} onJoin={enter} /></main>
   </div>;
 }
 
 function App() {
-  const [input, setInput] = useState("");
   const [code, setCode] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-  const { version, updateStatus } = useUpdateInfo();
-  if (code) return <Session code={code} leave={() => setCode(null)} />;
-  const join = () => { const normalized = normalizeRoom(input); if (isValidRoom(normalized)) setCode(normalized); else setMessage("Digite um código de sala com oito caracteres."); };
-  return <div className="entry-shell"><TitleBar version={version} updateStatus={updateStatus} onCheckUpdate={() => void window.lumenDesktop.checkUpdate()} onOpenReleases={() => void window.lumenDesktop.openReleases()} /><div className="entry"><div className="entry-card"><LogoMark /><span className="eyebrow">LUMEN DESKTOP</span><h1>Entre e fique à vontade.</h1><p>Assista às transmissões da sala ou compartilhe uma janela ou monitor quando quiser.</p><button className="go-live" onClick={() => setCode(createRoom())}>Criar sala</button><div className="entry-divider">ou entre numa sala</div><div className="join"><input value={input} maxLength={8} onChange={(e) => setInput(normalizeRoom(e.target.value))} onKeyDown={(e) => { if (e.key === "Enter") join(); }} placeholder="CÓDIGO DA SALA" aria-label="Código da sala" /><button onClick={join}>Entrar</button></div>{message && <small className="warning">{message}</small>}</div></div></div>;
+  return code ? <Session code={code} leave={() => setCode(null)} /> : <Entry enter={setCode} />;
 }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

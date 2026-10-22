@@ -1,7 +1,7 @@
 {
   "name": "lumen-desktop",
   "productName": "Lumen Desktop",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "private": true,
   "main": "dist-main/main.js",
   "scripts": {
@@ -13,6 +13,9 @@
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@fontsource/bricolage-grotesque": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "@supabase/supabase-js": "^2.117.1",
     "lucide-react": "^0.468.0",
     "react": "19.2.8",
