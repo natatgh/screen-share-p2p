@@ -59,6 +59,8 @@ jobs:
           if ($LASTEXITCODE -ne 1) { throw "O auxiliar aceitou uma janela inválida." }
           & apps/desktop/native/build/Release/lumen-audio.exe --system 0
           if ($LASTEXITCODE -ne 1) { throw "O auxiliar aceitou um processo inválido." }
+          $tree = & apps/desktop/native/build/Release/lumen-audio.exe --tree
+          if ($LASTEXITCODE -ne 0 -or -not ($tree -match '^P \d+ \d+ .+')) { throw "O auxiliar não listou os processos." }
           $global:LASTEXITCODE = 0
       - name: Package PR preview
         if: github.event_name == 'pull_request'

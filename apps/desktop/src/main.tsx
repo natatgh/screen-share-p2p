@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, Check, ChevronDown, Copy, ExternalLink, Maximize2, MonitorPlay, Radio, RefreshCw, ScreenShare, Settings2, Square, Users, Volume2, VolumeX, X } from "lucide-react";
+import { Activity, Check, ChevronDown, Copy, ExternalLink, Lock, Maximize2, MonitorPlay, Radio, RefreshCw, ScreenShare, Settings2, Square, Unlock, UserX, Users, Volume2, VolumeX, X } from "lucide-react";
 import { createRoom, isValidRoom, normalizeRoom } from "../../../src/lib/room";
 import { useRoom, type RoomCapture } from "../../../src/lib/use-room";
 import { ConnectionDiagnostics, EffectiveQuality } from "../../../src/components/connection-diagnostics";
@@ -183,9 +183,16 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
           setAudioWarning(cause instanceof Error ? cause.message : "Áudio indisponível; somente vídeo será transmitido.");
         }
       }
+      void window.lumenDesktop.followSource();
       return stream;
     },
+    onSourceChange: (listener) => window.lumenDesktop.onCaptureRetarget((sourceId) => listener(async () => {
+      // Legacy desktop constraints: unlike getDisplayMedia they need no click, and this swap comes from the main process.
+      const next = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId } } } as MediaStreamConstraints);
+      return next.getVideoTracks()[0];
+    })),
     stop: () => {
+      void window.lumenDesktop.unfollowSource();
       captureRef.current?.unsubscribe();
       void captureRef.current?.context.close();
       captureRef.current = null;
@@ -194,7 +201,7 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
     },
   }), []);
 
-  const { runtime, exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality } = useRoom(code, {
+  const { runtime, exportDiagnostics, peers, remotes, localStream, sharing, settings, adaptiveQuality, settingsWarning, status, error, metrics, startSharing, stopSharing, setSettings, setAdaptiveQuality, owner, roomLocked, lockedOut, kicked, duplicateTab, kickPeer, toggleRoomLock } = useRoom(code, {
     capture,
     runtimeMetrics: async () => { audioNode.current?.port.postMessage({ type: "stats" }); return { ...await window.lumenDesktop.getRuntimeMetrics(), ...(audioNode.current ? audioStats.current : {}) }; },
     signaling: { url: __SUPABASE_URL__, key: __SUPABASE_KEY__, localHost: "localhost", production: import.meta.env.PROD },
@@ -213,11 +220,19 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
   const invite = `https://screen-share-p2p.vercel.app/room/${code}`;
   const copy = async () => { await navigator.clipboard.writeText(invite); setCopied(true); setTimeout(() => setCopied(false), 2200); };
 
+  const blocked = kicked ? { title: "Você foi removido da sala", message: "Quem está apresentando encerrou sua participação nesta sala." }
+    : lockedOut ? { title: "Sala trancada", message: "Quem está apresentando trancou esta sala para novas entradas." }
+    : duplicateTab ? { title: "Sala já aberta em outra aba", message: "Esta sala já está aberta em outra janela do Lumen neste computador." } : null;
+  if (blocked) return <div className="app-shell">
+    <TitleBar code={code} status={status} version={version} updateStatus={updateStatus} onCheckUpdate={() => void window.lumenDesktop.checkUpdate()} onOpenReleases={() => void window.lumenDesktop.openReleases()} />
+    <div className="room-empty"><h3>{blocked.title}</h3><p>{blocked.message}</p><button className="secondary" onClick={leave}>Voltar ao início</button></div>
+  </div>;
+
   return <div className="app-shell">
     <TitleBar code={code} status={status} version={version} updateStatus={updateStatus} onCheckUpdate={() => void window.lumenDesktop.checkUpdate()} onOpenReleases={() => void window.lumenDesktop.openReleases()} />
     <main className="content"><aside className="sidebar"><div className="sidebar-top"><span className="eyebrow">SUA SALA</span><h1>{code}</h1><p>Assista às transmissões ou compartilhe sua tela quando quiser.</p></div>
-      <div className="sidebar-section"><div className="section-heading">CONVITE</div><div className="invite-box"><span>{code}</span><button onClick={() => void copy()} title="Copiar link da sala">{copied ? <Check size={17} /> : <Copy size={17} />}</button></div><small>{copied ? "Link copiado" : "Convide pessoas pelo link"}</small></div>
-      <div className="sidebar-section"><div className="section-heading people-heading"><span><Users size={14} /> PARTICIPANTES</span><b>{peers.length + 1}</b></div><div className="person"><span className="avatar self">V</span><span><b>Você</b><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></span>{sharing && <Radio size={14} />}</div>{peers.map((peer, index) => <div className="person" key={peer}><span className="avatar">{index + 1}</span><span><b>Participante {index + 1}</b><small>{remotes.some((remote) => remote.id === peer) ? "Transmitindo agora" : "Na sala"}</small></span>{remotes.some((remote) => remote.id === peer) && <Radio size={14} />}</div>)}</div>
+      <div className="sidebar-section"><div className="section-heading">CONVITE</div><div className="invite-box"><span>{code}</span><button onClick={() => void copy()} title="Copiar link da sala">{copied ? <Check size={17} /> : <Copy size={17} />}</button></div><small>{copied ? "Link copiado" : "Convide pessoas pelo link"}</small>{owner && <button className="secondary" onClick={() => toggleRoomLock(!roomLocked)}>{roomLocked ? <Unlock size={15} /> : <Lock size={15} />}{roomLocked ? "Destrancar sala" : "Trancar sala"}</button>}</div>
+      <div className="sidebar-section"><div className="section-heading people-heading"><span><Users size={14} /> PARTICIPANTES</span><b>{peers.length + 1}</b></div><div className="person"><span className="avatar self">V</span><span><b>Você</b><small>{sharing ? "Transmitindo agora" : "Na sala"}</small></span>{sharing && <Radio size={14} />}</div>{peers.map((peer, index) => <div className="person" key={peer}><span className="avatar">{index + 1}</span><span><b>Participante {index + 1}</b><small>{remotes.some((remote) => remote.id === peer) ? "Transmitindo agora" : "Na sala"}</small></span>{remotes.some((remote) => remote.id === peer) && <Radio size={14} />}{owner && <button className="icon-button" onClick={() => kickPeer(peer)} aria-label="Expulsar participante" title="Expulsar participante"><UserX size={14} /></button>}</div>)}</div>
       <div className="sidebar-bottom"><button onClick={() => { stopSharing(); leave(); }}>Sair da sala</button></div></aside>
       <section className="workspace room-workspace"><div className="workspace-title"><div><span className="eyebrow">SALA DE TRANSMISSÃO</span><h2>{remotes.length + (sharing ? 1 : 0) ? "Transmissões ao vivo" : peers.length ? "Pessoas na sala" : "Tudo pronto para assistir"}</h2></div><span className="viewer-count"><Users size={16} /> {peers.length + 1} na sala</span></div><EffectiveQuality metrics={metrics} /><DiagnosticsPanel status={status} peers={peers} metrics={metrics} adaptiveQuality={adaptiveQuality} onAdaptiveQualityChange={setAdaptiveQuality} onExport={exportDiagnostics} runtime={runtime} codec={settings.codec} onCodecChange={sharing ? (codec) => void setSettings({ ...settings, codec }) : undefined} />
         {remotes.length || (sharing && localStream) ? <div className="stream-grid">{remotes.map((remote) => <VideoTile key={remote.id} stream={remote.stream} label={`Participante ${Math.max(1, peers.indexOf(remote.id) + 1)}`} />)}{sharing && localStream && <VideoTile stream={localStream} label="Sua tela" own />}</div> : peers.length ? <div className="members-area"><div className="member-grid"><div className="member-tile"><span className="member-avatar self">V</span><strong>Você</strong><small>Assistindo</small></div>{peers.map((peer, index) => <div className="member-tile" key={peer}><span className="member-avatar">{index + 1}</span><strong>Participante {index + 1}</strong><small>Na sala</small></div>)}</div><div className="members-cta"><span>Nenhuma transmissão ao vivo ainda. Use &ldquo;Compartilhar tela&rdquo; abaixo para começar.</span></div></div> : <div className="room-empty"><div className="empty-icon"><MonitorPlay size={42} strokeWidth={1.5} /></div><h3>Nenhuma tela compartilhada ainda</h3><p>Use &ldquo;Compartilhar tela&rdquo; abaixo para começar, ou convide mais gente.</p><button className="secondary" onClick={() => void copy()}><Copy size={16} /> {copied ? "Copiado" : "Copiar convite"}</button></div>}
