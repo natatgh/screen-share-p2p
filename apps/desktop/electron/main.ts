@@ -1,15 +1,18 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, session, shell, type DesktopCapturerSource } from "electron";
-import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { execFile, spawn, type ChildProcessByStdio } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import { checkForUpdate, installPendingUpdate, type Distribution } from "./updater";
 import { audioSourceArgs } from "./audio-source";
+import { createSourceFollower } from "./source-follower";
+import { parseProcessSnapshot, type ProcessSnapshot } from "./window-family";
 
 let mainWindow: BrowserWindow | null = null;
 let sources = new Map<string, DesktopCapturerSource>();
 let selectedSource: DesktopCapturerSource | null = null;
 let audioProcess: ChildProcessByStdio<null, Readable, Readable> | null = null;
+let audioWanted = false;
 const releasesUrl = "https://github.com/natatgh/screen-share-p2p/releases";
 
 function trusted(event: Electron.IpcMainInvokeEvent): void {
@@ -25,6 +28,14 @@ function audioHelperPath(): string {
   return app.isPackaged
     ? path.join(process.resourcesPath, "native", "lumen-audio.exe")
     : path.join(__dirname, "..", "native", "build", "Release", "lumen-audio.exe");
+}
+
+function snapshotProcesses(): Promise<ProcessSnapshot | null> {
+  return new Promise((resolve) => {
+    execFile(audioHelperPath(), ["--tree"], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
+      resolve(error ? null : parseProcessSnapshot(stdout));
+    });
+  });
 }
 
 async function startAudio(): Promise<{ ok: boolean; error?: string }> {
@@ -61,6 +72,34 @@ async function startAudio(): Promise<{ ok: boolean; error?: string }> {
   });
 }
 
+function notifyRenderer(channel: string, ...args: unknown[]): void {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args);
+}
+
+async function retargetCapture(next: DesktopCapturerSource): Promise<void> {
+  selectedSource = next;
+  notifyRenderer("capture:retarget", next.id);
+  if (!audioWanted) return;
+  const result = await startAudio();
+  // An empty message clears the warning left by the previous window's audio ending.
+  notifyRenderer("audio:error", result.ok ? "" : result.error ?? "Não foi possível acompanhar o áudio da nova janela.");
+}
+
+const follower = createSourceFollower({
+  ownPid: process.pid,
+  listWindowIds: async () => {
+    const list = await desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 0, height: 0 }, fetchWindowIcons: false });
+    for (const source of list) sources.set(source.id, source);
+    return list.map((source) => source.id);
+  },
+  snapshot: snapshotProcesses,
+  retarget: async (id) => {
+    const next = sources.get(id);
+    if (next) await retargetCapture(next);
+  },
+  onError: () => notifyRenderer("audio:error", "Não foi possível acompanhar a janela do aplicativo."),
+});
+
 async function createWindow(): Promise<void> {
   const icon = app.isPackaged
     ? path.join(process.resourcesPath, "assets", "lumen-icon.png")
@@ -80,7 +119,7 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on("will-navigate", (event) => event.preventDefault());
   if (app.isPackaged) await mainWindow.loadFile(path.join(__dirname, "..", "dist-renderer", "index.html"));
   else await mainWindow.loadFile(path.join(__dirname, "..", "dist-renderer", "index.html"));
-  mainWindow.on("closed", () => { mainWindow = null; stopAudio(); });
+  mainWindow.on("closed", () => { mainWindow = null; follower.stop(); stopAudio(); });
 }
 
 if (process.platform === "win32") app.setAppUserModelId("app.lumen.desktop");
@@ -106,11 +145,18 @@ app.whenReady().then(async () => {
     trusted(event);
     if (typeof id !== "string" || !sources.has(id)) throw new Error("Fonte inválida.");
     selectedSource = sources.get(id)!;
+    follower.stop();
+    audioWanted = false;
     stopAudio();
     return true;
   });
-  ipcMain.handle("audio:start", async (event) => { trusted(event); return startAudio(); });
-  ipcMain.handle("audio:stop", (event) => { trusted(event); stopAudio(); });
+  ipcMain.handle("capture:follow", async (event) => {
+    trusted(event);
+    return selectedSource?.id.startsWith("window:") ? follower.follow(selectedSource.id) : false;
+  });
+  ipcMain.handle("capture:unfollow", (event) => { trusted(event); follower.stop(); });
+  ipcMain.handle("audio:start", async (event) => { trusted(event); audioWanted = true; return startAudio(); });
+  ipcMain.handle("audio:stop", (event) => { trusted(event); audioWanted = false; stopAudio(); });
   ipcMain.handle("app:metrics", (event) => {
     trusted(event);
     const metrics = app.getAppMetrics();

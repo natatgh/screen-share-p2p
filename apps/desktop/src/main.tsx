@@ -183,9 +183,16 @@ function Session({ code, leave }: { code: string; leave: () => void }) {
           setAudioWarning(cause instanceof Error ? cause.message : "Áudio indisponível; somente vídeo será transmitido.");
         }
       }
+      void window.lumenDesktop.followSource();
       return stream;
     },
+    onSourceChange: (listener) => window.lumenDesktop.onCaptureRetarget((sourceId) => listener(async () => {
+      // Legacy desktop constraints: unlike getDisplayMedia they need no click, and this swap comes from the main process.
+      const next = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId } } } as MediaStreamConstraints);
+      return next.getVideoTracks()[0];
+    })),
     stop: () => {
+      void window.lumenDesktop.unfollowSource();
       captureRef.current?.unsubscribe();
       void captureRef.current?.context.close();
       captureRef.current = null;

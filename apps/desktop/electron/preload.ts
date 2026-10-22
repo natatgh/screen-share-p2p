@@ -3,6 +3,13 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("lumenDesktop", {
   listSources: () => ipcRenderer.invoke("sources:list"),
   selectSource: (id: string) => ipcRenderer.invoke("sources:select", id),
+  followSource: () => ipcRenderer.invoke("capture:follow"),
+  unfollowSource: () => ipcRenderer.invoke("capture:unfollow"),
+  onCaptureRetarget: (callback: (sourceId: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, sourceId: string) => callback(sourceId);
+    ipcRenderer.on("capture:retarget", listener);
+    return () => ipcRenderer.removeListener("capture:retarget", listener);
+  },
   startAppAudio: () => ipcRenderer.invoke("audio:start"),
   stopAppAudio: () => ipcRenderer.invoke("audio:stop"),
   onAudioChunk: (callback: (data: Uint8Array) => void) => {

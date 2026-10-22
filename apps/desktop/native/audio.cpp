@@ -4,6 +4,7 @@
 #include <audioclient.h>
 #include <audioclientactivationparams.h>
 #include <mmdeviceapi.h>
+#include <tlhelp32.h>
 #include <wrl/client.h>
 #include <wrl/implements.h>
 #include <cstdio>
@@ -42,7 +43,33 @@ static int fail(const char* stage, HRESULT result) {
   return 1;
 }
 
+static BOOL CALLBACK printVisibleWindow(HWND hwnd, LPARAM) {
+  DWORD processId = 0;
+  if (IsWindowVisible(hwnd) && GetWindowThreadProcessId(hwnd, &processId) && processId) {
+    std::printf("W %llu %lu\n", static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(hwnd)), processId);
+  }
+  return TRUE;
+}
+
+// Prints visible top-level windows ("W <hwnd> <pid>") and every process ("P <pid> <parent> <exe>") so the
+// app can follow a shared window to another window of the same application.
+static int printProcessTree() {
+  EnumWindows(printVisibleWindow, 0);
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) return fail("Lista de processos indisponível", HRESULT_FROM_WIN32(GetLastError()));
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  for (BOOL more = Process32FirstW(snapshot, &entry); more; more = Process32NextW(snapshot, &entry)) {
+    char exe[MAX_PATH * 3] = {};
+    WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, exe, sizeof(exe) - 1, nullptr, nullptr);
+    std::printf("P %lu %lu %s\n", entry.th32ProcessID, entry.th32ParentProcessID, exe);
+  }
+  CloseHandle(snapshot);
+  return 0;
+}
+
 int wmain(int argc, wchar_t** argv) {
+  if (argc == 2 && std::wcscmp(argv[1], L"--tree") == 0) return printProcessTree();
   const bool systemAudio = argc == 3 && std::wcscmp(argv[1], L"--system") == 0;
   if (argc != 2 && !systemAudio) return fail("Fonte de áudio inválida", E_INVALIDARG);
   wchar_t* end = nullptr;

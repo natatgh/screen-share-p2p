@@ -16,7 +16,15 @@ import { isLockedOut } from "./room-policy";
 const STUN_ONLY: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 type Link = { pc: RTCPeerConnection; pending: RTCIceCandidateInit[]; recovery?: PeerRecovery; renegotiate?: () => Promise<void> };
 type Remote = { id: string; stream: MediaStream };
-export type RoomCapture = { start: (settings: StreamSettings) => Promise<MediaStream>; stop?: () => void };
+type TrackFactory = () => Promise<MediaStreamTrack>;
+export type RoomCapture = {
+  start: (settings: StreamSettings) => Promise<MediaStream>;
+  stop?: () => void;
+  /** Lets the platform move a live share to another source (the desktop app follows a game's windows). */
+  onSourceChange?: (listener: (next: TrackFactory) => void) => () => void;
+};
+/** How long a lost source may stay gone before the share ends, when the platform can follow it elsewhere. */
+const SOURCE_RETURN_GRACE_MS = 60_000;
 export type RoomOptions = { capture?: RoomCapture; signaling?: SignalingConfig; runtimeMetrics?: () => Promise<RuntimeMetrics>; turnBaseUrl?: string };
 
 export function useRoom(room: string, options?: RoomOptions) {
@@ -128,14 +136,56 @@ export function useRoom(room: string, options?: RoomOptions) {
     link.recovery.negotiating();
   }, [closeOutbound, send]);
 
+  const sourceLostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearSourceLost = useCallback(() => {
+    if (sourceLostTimer.current) clearTimeout(sourceLostTimer.current);
+    sourceLostTimer.current = null;
+  }, []);
+
   const stopSharing = useCallback(() => {
+    clearSourceLost();
     for (const id of [...outbound.current.keys()]) closeOutbound(id, true);
     local.current?.getTracks().forEach((track) => track.stop());
     local.current = null;
     optionsRef.current?.capture?.stop?.();
     setLocalStream(null);
     setSharing(false);
-  }, [closeOutbound]);
+  }, [closeOutbound, clearSourceLost]);
+
+  // A source that can be followed elsewhere gets a grace period to be replaced before the share ends.
+  const endShareWhenSourceEnds = useCallback((track: MediaStreamTrack) => {
+    track.addEventListener("ended", () => {
+      if (!optionsRef.current?.capture?.onSourceChange) { stopSharing(); return; }
+      clearSourceLost();
+      sourceLostTimer.current = setTimeout(stopSharing, SOURCE_RETURN_GRACE_MS);
+    }, { once: true });
+  }, [stopSharing, clearSourceLost]);
+
+  const swapVideoTrack = useCallback(async (next: TrackFactory) => {
+    const stream = local.current;
+    const previous = stream?.getVideoTracks()[0];
+    if (!stream || !previous) return;
+    let track: MediaStreamTrack;
+    try { track = await next(); }
+    catch { setError("Não foi possível acompanhar a janela do aplicativo."); return; }
+    if (local.current !== stream) { track.stop(); return; }
+    track.contentHint = contentHintForSettings(settingsRef.current);
+    try { await track.applyConstraints(captureConstraintsForSettings(effectiveSettings(settingsRef.current, captureStep.current as 0 | 1 | 2))); }
+    catch { setSettingsWarning("O navegador não conseguiu aplicar a qualidade à nova janela."); }
+    const replaced = [...outbound.current.values()].flatMap((link) => link.pc.getSenders().filter((sender) => sender.track?.kind === "video").map((sender) => sender.replaceTrack(track)));
+    await Promise.allSettled(replaced);
+    clearSourceLost();
+    stream.removeTrack(previous);
+    previous.stop();
+    stream.addTrack(track);
+    endShareWhenSourceEnds(track);
+    setError("");
+  }, [clearSourceLost, endShareWhenSourceEnds]);
+
+  useEffect(() => {
+    if (!sharing) return;
+    return optionsRef.current?.capture?.onSourceChange?.((next) => void swapVideoTrack(next));
+  }, [sharing, swapVideoTrack]);
 
   const setSettings = useCallback(async (next: StreamSettings) => {
     const codecChanged = next.codec !== settingsRef.current.codec;
@@ -202,7 +252,7 @@ export function useRoom(room: string, options?: RoomOptions) {
       adaptation.current.clear();
       local.current = stream;
       setLocalStream(stream);
-      stream.getVideoTracks()[0].addEventListener("ended", stopSharing, { once: true });
+      endShareWhenSourceEnds(stream.getVideoTracks()[0]);
       report.current.reset();
       setSharing(true);
       for (const id of peersRef.current) void startOutbound(id, stream);
@@ -210,7 +260,7 @@ export function useRoom(room: string, options?: RoomOptions) {
       if (cause instanceof DOMException && cause.name === "NotAllowedError") return;
       setError("Não foi possível capturar a tela. Confira a permissão do navegador.");
     }
-  }, [startOutbound, stopSharing]);
+  }, [startOutbound, endShareWhenSourceEnds]);
 
   // The screen can sleep mid-presentation and kill capture; a wake lock avoids
   // that. The OS/browser releases it whenever the tab goes hidden, so reacquire
@@ -327,6 +377,7 @@ export function useRoom(room: string, options?: RoomOptions) {
     return () => {
       cancelled = true;
       releaseLock();
+      clearSourceLost();
       signaling.current?.close();
       for (const link of currentOutbound.values()) { link.recovery?.close(); link.pc.close(); }
       for (const link of currentInbound.values()) link.pc.close();
@@ -336,7 +387,7 @@ export function useRoom(room: string, options?: RoomOptions) {
       local.current = null;
       optionsRef.current?.capture?.stop?.();
     };
-  }, [room, closeInbound, closeOutbound, send, startOutbound, stopSharing]);
+  }, [room, closeInbound, closeOutbound, send, startOutbound, stopSharing, clearSourceLost]);
 
   useEffect(() => {
     let active = true;

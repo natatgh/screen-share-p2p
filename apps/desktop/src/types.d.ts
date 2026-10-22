@@ -2,6 +2,9 @@ export type CaptureSource = { id: string; name: string; type: "window" | "screen
 export type DesktopBridge = {
   listSources(): Promise<CaptureSource[]>;
   selectSource(id: string): Promise<boolean>;
+  followSource(): Promise<boolean>;
+  unfollowSource(): Promise<void>;
+  onCaptureRetarget(callback: (sourceId: string) => void): () => void;
   startAppAudio(): Promise<{ ok: boolean; error?: string }>;
   stopAppAudio(): Promise<void>;
   onAudioChunk(callback: (data: Uint8Array) => void): () => void;
